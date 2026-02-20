@@ -50,11 +50,27 @@ if [ ! -e "$mt5file" ]; then
     $wine_executable reg add "HKEY_CURRENT_USER\\Software\\Wine" /v Version /t REG_SZ /d "win10" /f
     curl -L -o /tmp/mt5setup.exe "$mt5setup_url"
 
-    # FIX #2: Run installer in foreground (no &) and wait for it to fully complete
-    $wine_executable /tmp/mt5setup.exe /auto
-    # Belt-and-suspenders: also wait for any lingering wineserver processes
+    # MT5's /auto installer spawns a child process and exits early — the parent
+    # returning does NOT mean installation is complete. We launch it, then poll
+    # for the terminal64.exe to actually appear (up to 3 minutes).
+    $wine_executable /tmp/mt5setup.exe /auto &
+    MT5_INSTALL_TIMEOUT=180
+    MT5_ELAPSED=0
+    show_message "[2/7] Waiting for MT5 installation to complete (up to ${MT5_INSTALL_TIMEOUT}s)..."
+    while [ ! -e "$mt5file" ] && [ $MT5_ELAPSED -lt $MT5_INSTALL_TIMEOUT ]; do
+        sleep 5
+        MT5_ELAPSED=$((MT5_ELAPSED + 5))
+        echo "  ...waiting for MT5 (${MT5_ELAPSED}s elapsed)"
+    done
+
     wineserver --wait
     rm -f /tmp/mt5setup.exe
+
+    if [ ! -e "$mt5file" ]; then
+        show_message "[2/7] ERROR: MT5 still not found after ${MT5_INSTALL_TIMEOUT}s. Installation failed."
+        exit 1
+    fi
+    show_message "[2/7] MT5 installed successfully."
 fi
 
 # [3/7] Install Python in Wine
