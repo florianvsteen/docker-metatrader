@@ -30,10 +30,19 @@ RUN apt-get update \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* /etc/apt/keyrings/winehq-archive.key
 
-
-COPY /Metatrader /Metatrader
+# Copy the main startup script
+COPY start.sh /Metatrader/start.sh
 RUN chmod +x /Metatrader/start.sh
-COPY /root /
+
+# Place Openbox config files explicitly — the linuxserver KasmVNC base image
+# reads autostart from /etc/xdg/openbox/autostart and menu from the same dir.
+# The previous COPY /root / relied on a specific build-context folder structure
+# that was silently not working.
+COPY autostart /etc/xdg/openbox/autostart
+COPY menu.xml  /etc/xdg/openbox/menu.xml
+
+# The linuxserver base image also supports scripts dropped into
+# /etc/s6-overlay/s6-rc.d/ but autostart via Openbox is sufficient here.
 
 EXPOSE 3000 8001
 VOLUME /config
