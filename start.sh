@@ -15,6 +15,9 @@ mt5setup_url="https://download.mql5.com/cdn/web/metaquotes.software.corp/mt5/mt5
 export WINEPREFIX
 export WINEDEBUG
 
+# DISPLAY must be set for Wine to work — KasmVNC runs on :1
+export DISPLAY="${DISPLAY:-:1}"
+
 show_message() { echo "$1"; }
 
 check_dependency() {
@@ -26,12 +29,18 @@ check_dependency() {
 check_dependency "curl"
 check_dependency "$wine_executable"
 
-# --- FIX #1: Bootstrap the Wine prefix FIRST before any file operations ---
-# wineboot creates the drive_c directory structure before we try to write into it
+# FIX: The /config volume persists between container recreations. If a stale
+# autostart (e.g. just "xterm") exists from a previous run, overwrite it with
+# the correct one from /defaults so it doesn't block the X session on next boot.
+if [ -f /defaults/autostart ]; then
+    mkdir -p /config/.config/openbox
+    cp /defaults/autostart /config/.config/openbox/autostart
+fi
+
+# [0/7] Bootstrap the Wine prefix FIRST before any file operations
 if [ ! -d "/config/.wine/drive_c" ]; then
     show_message "[0/7] Initialising Wine prefix..."
     wineboot --init
-    # Wait for wineserver to finish initialising
     wineserver --wait
 fi
 
@@ -50,9 +59,8 @@ if [ ! -e "$mt5file" ]; then
     $wine_executable reg add "HKEY_CURRENT_USER\\Software\\Wine" /v Version /t REG_SZ /d "win10" /f
     curl -L -o /tmp/mt5setup.exe "$mt5setup_url"
 
-    # MT5's /auto installer spawns a child process and exits early — the parent
-    # returning does NOT mean installation is complete. We launch it, then poll
-    # for the terminal64.exe to actually appear (up to 3 minutes).
+    # MT5's /auto installer spawns a child process and exits early — poll for
+    # terminal64.exe to appear (up to 3 minutes).
     $wine_executable /tmp/mt5setup.exe /auto &
     MT5_INSTALL_TIMEOUT=180
     MT5_ELAPSED=0
@@ -82,10 +90,9 @@ if ! $wine_executable python --version &>/dev/null; then
     rm -f /tmp/python-installer.exe
 fi
 
-# [4/7] RUN MT5 WITH AUTO-LOGIN
+# [4/7] Launch MT5 with auto-login
 if [ -e "$mt5file" ]; then
     show_message "[4/7] Generating Auto-Login Config..."
-
     mkdir -p "/config/.wine/drive_c"
     {
         echo "[Common]"
@@ -102,20 +109,20 @@ if [ -e "$mt5file" ]; then
     show_message "[4/7] Launching MT5 for account $MT5_USER..."
     $wine_executable "$mt5file" /portable "/config:C:\\auto_login.ini" $MT5_CMD_OPTIONS &
 else
-    show_message "[4/7] MT5 executable not found — installer may have failed. Check logs above."
+    show_message "[4/7] MT5 executable not found — installer may have failed."
     exit 1
 fi
 
-# [5/7] Install Wine-side MetaTrader5 + mt5linux packages
+# [5/7] Install Wine-side packages
 show_message "[5/7] Installing Wine Python packages..."
 $wine_executable python -m pip install --upgrade pip --quiet
 $wine_executable python -m pip install MetaTrader5==$metatrader_version mt5linux --quiet
 
-# [6/7] FIX #3: Install mt5linux on the HOST Python as well (needed for the bridge server)
+# [6/7] Install mt5linux on HOST Python (needed to run the bridge server)
 show_message "[6/7] Installing mt5linux on host Python..."
 pip3 install mt5linux --quiet --break-system-packages 2>/dev/null || pip3 install mt5linux --quiet
 
-# [7/7] Start the Bridge Server
+# [7/7] Start the RPyC bridge server
 show_message "[7/7] Starting mt5linux server on port $mt5server_port..."
 python3 -m mt5linux --host 0.0.0.0 -p "$mt5server_port" -w "$wine_executable" python.exe &
 
