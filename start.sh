@@ -14,8 +14,6 @@ mt5setup_url="https://download.mql5.com/cdn/web/metaquotes.software.corp/mt5/mt5
 
 export WINEPREFIX
 export WINEDEBUG
-
-# DISPLAY must be set for Wine to work — KasmVNC runs on :1
 export DISPLAY="${DISPLAY:-:1}"
 
 show_message() { echo "$1"; }
@@ -26,22 +24,41 @@ check_dependency() {
     fi
 }
 
+# Helper: wait for wineserver with a timeout instead of blocking forever
+wineserver_wait() {
+    local timeout=${1:-60}
+    local elapsed=0
+    while wineserver -w 2>/dev/null && [ $elapsed -lt $timeout ]; do
+        sleep 2
+        elapsed=$((elapsed + 2))
+    done
+}
+
 check_dependency "curl"
 check_dependency "$wine_executable"
 
-# FIX: The /config volume persists between container recreations. If a stale
-# autostart (e.g. just "xterm") exists from a previous run, overwrite it with
-# the correct one from /defaults so it doesn't block the X session on next boot.
+# Keep the autostart fresh — prevents stale volume file breaking future deploys
 if [ -f /defaults/autostart ]; then
     mkdir -p /config/.config/openbox
     cp /defaults/autostart /config/.config/openbox/autostart
 fi
 
-# [0/7] Bootstrap the Wine prefix FIRST before any file operations
+# Wait for the X display to actually be ready before doing anything Wine-related
+echo "Waiting for X display $DISPLAY..."
+for i in $(seq 1 30); do
+    if xdpyinfo -display "$DISPLAY" &>/dev/null; then
+        echo "Display $DISPLAY is ready."
+        break
+    fi
+    sleep 1
+done
+
+# [0/7] Bootstrap Wine prefix
 if [ ! -d "/config/.wine/drive_c" ]; then
     show_message "[0/7] Initialising Wine prefix..."
     wineboot --init
-    wineserver --wait
+    # Use a fixed sleep instead of wineserver --wait to avoid hanging
+    sleep 15
 fi
 
 # [1/7] Install Mono
@@ -49,7 +66,7 @@ if [ ! -d "/config/.wine/drive_c/windows/mono" ]; then
     show_message "[1/7] Installing Mono..."
     curl -L -o /tmp/mono.msi "$mono_url"
     WINEDLLOVERRIDES=mscoree=d $wine_executable msiexec /i /tmp/mono.msi /qn
-    wineserver --wait
+    sleep 10
     rm -f /tmp/mono.msi
 fi
 
@@ -59,8 +76,6 @@ if [ ! -e "$mt5file" ]; then
     $wine_executable reg add "HKEY_CURRENT_USER\\Software\\Wine" /v Version /t REG_SZ /d "win10" /f
     curl -L -o /tmp/mt5setup.exe "$mt5setup_url"
 
-    # MT5's /auto installer spawns a child process and exits early — poll for
-    # terminal64.exe to appear (up to 3 minutes).
     $wine_executable /tmp/mt5setup.exe /auto &
     MT5_INSTALL_TIMEOUT=180
     MT5_ELAPSED=0
@@ -71,7 +86,7 @@ if [ ! -e "$mt5file" ]; then
         echo "  ...waiting for MT5 (${MT5_ELAPSED}s elapsed)"
     done
 
-    wineserver --wait
+    sleep 5
     rm -f /tmp/mt5setup.exe
 
     if [ ! -e "$mt5file" ]; then
@@ -86,7 +101,7 @@ if ! $wine_executable python --version &>/dev/null; then
     show_message "[3/7] Installing Python in Wine..."
     curl -L "$python_url" -o /tmp/python-installer.exe
     $wine_executable /tmp/python-installer.exe /quiet InstallAllUsers=1 PrependPath=1
-    wineserver --wait
+    sleep 15
     rm -f /tmp/python-installer.exe
 fi
 
@@ -118,7 +133,7 @@ show_message "[5/7] Installing Wine Python packages..."
 $wine_executable python -m pip install --upgrade pip --quiet
 $wine_executable python -m pip install MetaTrader5==$metatrader_version mt5linux --quiet
 
-# [6/7] Install mt5linux on HOST Python (needed to run the bridge server)
+# [6/7] Install mt5linux on HOST Python
 show_message "[6/7] Installing mt5linux on host Python..."
 pip3 install mt5linux --quiet --break-system-packages 2>/dev/null || pip3 install mt5linux --quiet
 
