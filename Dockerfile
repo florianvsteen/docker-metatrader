@@ -34,15 +34,12 @@ RUN apt-get update \
 COPY start.sh /Metatrader/start.sh
 RUN chmod +x /Metatrader/start.sh
 
-# Place Openbox config files explicitly — the linuxserver KasmVNC base image
-# reads autostart from /etc/xdg/openbox/autostart and menu from the same dir.
-# The previous COPY /root / relied on a specific build-context folder structure
-# that was silently not working.
-COPY autostart /etc/xdg/openbox/autostart
-COPY menu.xml  /etc/xdg/openbox/menu.xml
-
-# The linuxserver base image also supports scripts dropped into
-# /etc/s6-overlay/s6-rc.d/ but autostart via Openbox is sufficient here.
+# Copy Openbox config using the same root/ convention as the original Dockerfile.
+# Files must exist at:
+#   root/etc/xdg/openbox/autostart
+#   root/etc/xdg/openbox/menu.xml
+# relative to the build context (same folder as the Dockerfile).
+COPY root/ /
 
 EXPOSE 3000 8001
 VOLUME /config
