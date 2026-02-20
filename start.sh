@@ -48,7 +48,7 @@ wait_for() {
     while [ ! -e "$target" ] && [ $elapsed -lt $timeout ]; do
         sleep 3
         elapsed=$((elapsed + 3))
-        log "  waiting for $(basename $target)... (${elapsed}s)"
+        log "  waiting for MT5... (${elapsed}s)"
     done
     [ -e "$target" ]
 }
