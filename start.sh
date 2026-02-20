@@ -24,16 +24,6 @@ check_dependency() {
     fi
 }
 
-# Helper: wait for wineserver with a timeout instead of blocking forever
-wineserver_wait() {
-    local timeout=${1:-60}
-    local elapsed=0
-    while wineserver -w 2>/dev/null && [ $elapsed -lt $timeout ]; do
-        sleep 2
-        elapsed=$((elapsed + 2))
-    done
-}
-
 check_dependency "curl"
 check_dependency "$wine_executable"
 
@@ -43,7 +33,7 @@ if [ -f /defaults/autostart ]; then
     cp /defaults/autostart /config/.config/openbox/autostart
 fi
 
-# Wait for the X display to actually be ready before doing anything Wine-related
+# Wait for X display to be ready before any Wine calls
 echo "Waiting for X display $DISPLAY..."
 for i in $(seq 1 30); do
     if xdpyinfo -display "$DISPLAY" &>/dev/null; then
@@ -53,20 +43,36 @@ for i in $(seq 1 30); do
     sleep 1
 done
 
-# [0/7] Bootstrap Wine prefix
+# [0/7] Bootstrap Wine prefix — run in background, it blocks if run foreground
 if [ ! -d "/config/.wine/drive_c" ]; then
     show_message "[0/7] Initialising Wine prefix..."
-    wineboot --init
-    # Use a fixed sleep instead of wineserver --wait to avoid hanging
-    sleep 15
+    wineboot --init &
+    WINEBOOT_PID=$!
+    # Poll for drive_c to appear rather than waiting on the process
+    for i in $(seq 1 60); do
+        if [ -d "/config/.wine/drive_c" ]; then
+            echo "  Wine prefix ready after ${i}s."
+            break
+        fi
+        sleep 1
+    done
+    # Kill wineboot if still running (it may linger)
+    kill $WINEBOOT_PID 2>/dev/null
+    wineserver -k 2>/dev/null
+    sleep 2
 fi
 
 # [1/7] Install Mono
 if [ ! -d "/config/.wine/drive_c/windows/mono" ]; then
     show_message "[1/7] Installing Mono..."
     curl -L -o /tmp/mono.msi "$mono_url"
-    WINEDLLOVERRIDES=mscoree=d $wine_executable msiexec /i /tmp/mono.msi /qn
-    sleep 10
+    WINEDLLOVERRIDES=mscoree=d $wine_executable msiexec /i /tmp/mono.msi /qn &
+    for i in $(seq 1 60); do
+        [ -d "/config/.wine/drive_c/windows/mono" ] && break
+        sleep 2
+    done
+    wineserver -k 2>/dev/null
+    sleep 2
     rm -f /tmp/mono.msi
 fi
 
@@ -100,8 +106,13 @@ fi
 if ! $wine_executable python --version &>/dev/null; then
     show_message "[3/7] Installing Python in Wine..."
     curl -L "$python_url" -o /tmp/python-installer.exe
-    $wine_executable /tmp/python-installer.exe /quiet InstallAllUsers=1 PrependPath=1
-    sleep 15
+    $wine_executable /tmp/python-installer.exe /quiet InstallAllUsers=1 PrependPath=1 &
+    for i in $(seq 1 60); do
+        $wine_executable python --version &>/dev/null && break
+        sleep 2
+    done
+    wineserver -k 2>/dev/null
+    sleep 2
     rm -f /tmp/python-installer.exe
 fi
 
