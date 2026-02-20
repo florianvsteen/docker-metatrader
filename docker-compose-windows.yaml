@@ -1,14 +1,21 @@
 services:
   mt5:
     build: .
-    image: gmag11/metatrader5_vnc
     container_name: mt5
+    environment:
+      # These feed into the auto_login.ini file
+      - MT5_USER=${MT5_USER}
+      - MT5_PASSWORD=${MT5_PASSWORD}
+      - MT5_SERVER=${MT5_BROKER}
+      # KasmVNC login (the web UI)
+      - CUSTOM_USER=${VNC_USER}
+      - PASSWORD=${VNC_PASSWORD}
     volumes:
       - mt5-config:/config
     ports:
-      - 3000:3000
-      - 8001:8001
-    env_file:
-      - .env
+      - "3001:3000"  # Web VNC
+      - "8001:8001"  # Python RPyC Bridge
+    restart: unless-stopped
+    
 volumes:
   mt5-config:
