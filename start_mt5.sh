@@ -35,13 +35,18 @@ if [ ! -f "$WINEPREFIX/drive_c/windows/system32/kernel32.dll" ]; then
         exit 1
     fi
     log "[1/5] Wine prefix ready."
-    # Set win10 mode
-    WINEDEBUG=-all wine reg add "HKEY_CURRENT_USER\\Software\\Wine" \
-        /v Version /t REG_SZ /d "win10" /f
-    # Disable debugger detection
+    # Disable debugger detection — MT5 installer calls IsDebuggerPresent
+    # which Wine triggers. This registry patch defeats that check.
     WINEDEBUG=-all wine reg add \
         "HKEY_LOCAL_MACHINE\\Software\\Microsoft\\Windows NT\\CurrentVersion\\AeDebug" \
         /v Auto /t REG_SZ /d "0" /f
+    WINEDEBUG=-all wine reg add \
+        "HKEY_LOCAL_MACHINE\\Software\\Microsoft\\Windows NT\\CurrentVersion\\AeDebug" \
+        /v Debugger /t REG_SZ /d "" /f
+    # Disable heap debug flags that Wine sets by default
+    WINEDEBUG=-all wine reg add \
+        "HKEY_LOCAL_MACHINE\\SYSTEM\\CurrentControlSet\\Control\\Session Manager" \
+        /v GlobalFlag /t REG_DWORD /d "0" /f
     wineserver -w
 else
     log "[1/5] Wine prefix already initialised."
@@ -90,6 +95,16 @@ if [ ! -f "$MT5_EXE" ]; then
 
     log "[4/5] Running MT5 installer..."
     WINEDEBUG="" WINEESYNC=0 WINEFSYNC=0 wine "$TMPDIR/mt5setup.exe" /auto &
+    MT5_INSTALLER_PID=$!
+
+    # Auto-dismiss any blocking dialogs including the debugger warning
+    (
+        while kill -0 $MT5_INSTALLER_PID 2>/dev/null; do
+            xdotool search --name "mt5setup.exe" key Return 2>/dev/null
+            xdotool search --name "MetaTrader" key Return 2>/dev/null
+            sleep 2
+        done
+    ) &
 
     log "[4/5] Waiting for MT5 (up to 8 min)..."
     for i in $(seq 1 96); do
