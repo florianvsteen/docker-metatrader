@@ -12,6 +12,12 @@ INSTALLER="${3:-/home/trader/mt5setup.exe}"
 
 BOTTLES_CLI="flatpak run --command=bottles-cli com.usebottles.bottles"
 
+# Flatpak inside Docker: disable bubblewrap's own sandboxing since the
+# container itself is already the sandbox. Without this you get
+# "Permission denied" from bwrap even with SYS_ADMIN + privileged.
+export FLATPAK_BWRAP=/bin/bwrap
+export container=docker
+
 log() { echo "[SETUP $(date '+%H:%M:%S')] $*"; }
 
 # ── Create the Bottle ─────────────────────────────────────────
