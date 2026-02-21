@@ -5,7 +5,7 @@ log "Running as: $(whoami) uid=$(id -u)"
 
 export DISPLAY=:99
 export WINEPREFIX=/home/trader/.mt5
-export WINEDEBUG=-all
+export WINEDEBUG=""
 export HOME=/home/trader
 
 MT5_EXE="$WINEPREFIX/drive_c/Program Files/MetaTrader 5/terminal64.exe"
@@ -27,6 +27,7 @@ auto_click_dialogs() {
         xdotool search --name "Wine Mono Installer" key Return 2>/dev/null
         xdotool search --name "Wine Gecko Installer" key Return 2>/dev/null
         xdotool search --name "Dialog" key Return 2>/dev/null
+        xdotool search --name "mt5setup.exe" key Return 2>/dev/null
         sleep 2
     done
 }
@@ -73,7 +74,7 @@ if [ ! -f "$MT5_EXE" ]; then
         "https://download.mql5.com/cdn/web/metaquotes.software.corp/mt5/mt5setup.exe"
 
     log "[3/5] Running MT5 installer..."
-    wine "$TMPDIR/mt5setup.exe" /auto &
+    WINEDEBUG="" wine "$TMPDIR/mt5setup.exe" /auto &
 
     log "[3/5] Waiting for MT5 to install (up to 5 min)..."
     for i in $(seq 1 60); do
