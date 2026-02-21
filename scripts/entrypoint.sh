@@ -31,4 +31,4 @@ log "  VNC is view-only by default (safe for verification)"
 log "  Logs   →  docker logs -f metatrader5"
 log "═══════════════════════════════════════════════"
 
-exec /usr/bin/supervisord -n -c /etc/supervisor/conf.d/supervisord.conf
+exec /usr/bin/supervisord -n -c /etc/supervisord.conf
