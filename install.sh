@@ -43,7 +43,7 @@ else
     VERSION_FULL=$(echo "$VERSION_ID * 100" | bc -l | cut -d "." -f1)
 
     echo Choose Wine repo
-    rm /etc/apt/sources.list.d/winehq*
+    #rm /etc/apt/sources.list.d/winehq*
 
     dpkg --add-architecture i386
     mkdir -pm755 /etc/apt/keyrings
