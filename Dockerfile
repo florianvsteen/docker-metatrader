@@ -4,9 +4,12 @@
 # ================================================================
 FROM archlinux:latest
 
-# ── 1. Enable multilib + full system upgrade ─────────────────
+# ── 1. Enable multilib + upgrade + lib32 (must be one layer) ─
+# multilib must be enabled before pacman -Syu and stay in the
+# same RUN so the repo config persists into the install step.
 RUN sed -i '/^#\[multilib\]/,/^#Include/{s/^#//}' /etc/pacman.conf && \
-    pacman -Syu --noconfirm
+    pacman -Syu --noconfirm && \
+    pacman -S --noconfirm --needed lib32-gcc-libs lib32-gnutls
 
 # ── 2. Base build tools ──────────────────────────────────────
 RUN pacman -S --noconfirm --needed base-devel git wget curl
@@ -14,16 +17,13 @@ RUN pacman -S --noconfirm --needed base-devel git wget curl
 # ── 3. Wine ──────────────────────────────────────────────────
 RUN pacman -S --noconfirm --needed wine wine-mono wine-gecko winetricks cabextract
 
-# ── 4. lib32 ─────────────────────────────────────────────────
-RUN pacman -S --noconfirm --needed lib32-gcc-libs lib32-gnutls
-
-# ── 5. Display + VNC ─────────────────────────────────────────
+# ── 4. Display + VNC ─────────────────────────────────────────
 RUN pacman -S --noconfirm --needed xorg-server-xvfb xorg-xdpyinfo x11vnc fluxbox xdotool
 
-# ── 6. Python ────────────────────────────────────────────────
+# ── 5. Python ────────────────────────────────────────────────
 RUN pacman -S --noconfirm --needed python python-pip
 
-# ── 7. Python packages ───────────────────────────────────────
+# ── 6. Python packages ───────────────────────────────────────
 RUN pacman -S --noconfirm --needed python-gobject
 RUN pacman -S --noconfirm --needed python-requests
 RUN pacman -S --noconfirm --needed python-yaml
@@ -32,20 +32,20 @@ RUN pacman -S --noconfirm --needed python-markdown
 RUN pacman -S --noconfirm --needed python-pycurl
 RUN pacman -S --noconfirm --needed p7zip
 
-# ── 8. System tools ──────────────────────────────────────────
+# ── 7. System tools ──────────────────────────────────────────
 RUN pacman -S --noconfirm --needed supervisor dbus inotify-tools procps-ng
 
-# ── 9. Fonts ─────────────────────────────────────────────────
+# ── 8. Fonts ─────────────────────────────────────────────────
 RUN pacman -S --noconfirm --needed ttf-liberation noto-fonts
 
-# ── 10. pip packages ─────────────────────────────────────────
+# ── 9. pip packages ──────────────────────────────────────────
 RUN pip install --break-system-packages novnc websockify patool
 
-# ── 11. Build user for AUR ───────────────────────────────────
+# ── 10. Build user for AUR (makepkg refuses root) ────────────
 RUN useradd -m -G wheel -s /bin/bash builder && \
     echo "builder ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
 
-# ── 12. Install Bottles from AUR ─────────────────────────────
+# ── 11. Install Bottles from AUR ─────────────────────────────
 USER builder
 RUN cd /tmp && \
     git clone https://aur.archlinux.org/bottles.git && \
@@ -53,23 +53,23 @@ RUN cd /tmp && \
     makepkg -si --noconfirm --skippgpcheck
 USER root
 
-# ── 13. Create trader user ────────────────────────────────────
+# ── 12. Create trader user ────────────────────────────────────
 RUN useradd -m -u 1000 -s /bin/bash trader
 
-# ── 14. Download MT5 installer ────────────────────────────────
+# ── 13. Download MT5 installer ────────────────────────────────
 RUN wget -q \
     "https://download.mql5.com/cdn/web/metaquotes.software.corp/mt5/mt5setup.exe" \
     -O /home/trader/mt5setup.exe && \
     chown trader:trader /home/trader/mt5setup.exe
 
-# ── 15. VNC dir + fluxbox config ─────────────────────────────
+# ── 14. VNC dir + fluxbox config ─────────────────────────────
 RUN mkdir -p /etc/vnc && \
     mkdir -p /home/trader/.fluxbox && \
     echo "session.screen0.toolbar.visible: false" \
         > /home/trader/.fluxbox/init && \
     chown -R trader:trader /home/trader/.fluxbox
 
-# ── 16. Copy scripts and supervisord config ───────────────────
+# ── 15. Copy scripts and supervisord config ───────────────────
 COPY supervisord.conf /etc/supervisord.conf
 COPY scripts/entrypoint.sh   /home/trader/scripts/entrypoint.sh
 COPY scripts/mt5-start.sh    /home/trader/scripts/mt5-start.sh
@@ -79,7 +79,7 @@ COPY scripts/tail-logs.sh    /home/trader/scripts/tail-logs.sh
 RUN chown -R trader:trader /home/trader/scripts && \
     chmod +x /home/trader/scripts/*.sh
 
-# ── 17. Persistent data directories ──────────────────────────
+# ── 16. Persistent data directories ──────────────────────────
 RUN mkdir -p \
     /home/trader/mt5-data/MQL5/Experts \
     /home/trader/mt5-data/MQL5/Scripts \
