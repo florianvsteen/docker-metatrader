@@ -1,4 +1,0 @@
-# Openbox autostart — runs when the desktop session starts
-# Redirect all output to a log file so we can debug via:
-#   docker exec mt5 tail -f /config/start.log
-/Metatrader/start.sh > /config/start.log 2>&1 &
