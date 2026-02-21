@@ -1,6 +1,5 @@
 FROM ghcr.io/linuxserver/baseimage-kasmvnc:debianbookworm
 
-# set version label
 ARG BUILD_DATE
 ARG VERSION
 LABEL build_version="Metatrader Docker:- ${VERSION} Build-date:- ${BUILD_DATE}"
@@ -10,7 +9,6 @@ ENV TITLE=Metatrader5
 ENV WINEPREFIX="/config/.wine"
 ENV WINEDEBUG=-all
 
-# Install all packages in a single layer to reduce image size
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
     python3 \
@@ -18,6 +16,7 @@ RUN apt-get update \
     python3-venv \
     wget \
     curl \
+    gosu \
     gnupg2 \
     software-properties-common \
     ca-certificates \
@@ -30,16 +29,9 @@ RUN apt-get update \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* /etc/apt/keyrings/winehq-archive.key
 
-# Copy the main startup script
 COPY start.sh /Metatrader/start.sh
 RUN chmod +x /Metatrader/start.sh
 
-# The linuxserver KasmVNC kasminit script reads autostart and menu.xml
-# from /defaults/ at runtime and copies them into the user's openbox config.
-# Build context MUST be structured as:
-#   root/defaults/autostart
-#   root/defaults/menu.xml
-# (NOT root/etc/xdg/openbox/ - that path does not work with this base image)
 COPY root/ /
 
 EXPOSE 3000 8001
