@@ -39,6 +39,9 @@ if [ ! -f "$WINEPREFIX/drive_c/windows/system32/kernel32.dll" ]; then
     log "[1/5] Initialising Wine prefix..."
     # Set win10 mode and boot — this creates the full prefix including kernel32.dll
     wine reg add "HKEY_CURRENT_USER\\Software\\Wine" /v Version /t REG_SZ /d "win10" /f 2>/dev/null || true
+    # Disable Wine's built-in debugger so MT5 installer doesn't detect it
+    wine reg add "HKEY_LOCAL_MACHINE\\Software\\Microsoft\\Windows NT\\CurrentVersion\\AeDebug" /v Debugger /t REG_SZ /d "" /f 2>/dev/null || true
+    wine reg add "HKEY_LOCAL_MACHINE\\Software\\Microsoft\\Windows NT\\CurrentVersion\\AeDebug" /v Auto /t REG_SZ /d "0" /f 2>/dev/null || true
     # wineboot initialises the prefix; run in bg and poll for kernel32.dll
     wineboot -u &
     for i in $(seq 1 60); do
@@ -74,7 +77,7 @@ if [ ! -f "$MT5_EXE" ]; then
         "https://download.mql5.com/cdn/web/metaquotes.software.corp/mt5/mt5setup.exe"
 
     log "[3/5] Running MT5 installer..."
-    WINEDEBUG="" wine "$TMPDIR/mt5setup.exe" /auto &
+    WINEDEBUG="" WINEESYNC=0 WINEFSYNC=0 wine "$TMPDIR/mt5setup.exe" /auto &
 
     log "[3/5] Waiting for MT5 to install (up to 5 min)..."
     for i in $(seq 1 60); do
