@@ -13,9 +13,15 @@ log() { echo "[SETUP $(date '+%H:%M:%S')] $*"; }
 export DISPLAY=:99
 export XDG_DATA_HOME=/home/trader/.local/share
 export HOME=/home/trader
+export DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/1000/bus"
 
-# ── Init D-Bus session ────────────────────────────────────────
-eval "$(dbus-launch --sh-syntax 2>/dev/null)" || true
+# ── Wait for D-Bus session to be ready ───────────────────────
+log "Waiting for D-Bus session bus..."
+for i in $(seq 1 30); do
+    [ -S /run/user/1000/bus ] && break
+    sleep 1
+done
+[ -S /run/user/1000/bus ] && log "✓ D-Bus session ready." || log "⚠ D-Bus socket not found, continuing anyway..."
 
 # ── Create Bottle ─────────────────────────────────────────────
 log "Creating bottle '$BOTTLE_NAME' (Windows 10, win64)..."
