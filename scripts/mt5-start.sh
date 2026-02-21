@@ -12,6 +12,10 @@ INSTALLER="/home/trader/mt5setup.exe"
 BOTTLE_FLAG="/home/trader/.bottles_ready"
 BOTTLES_CLI="flatpak run --command=bottles-cli com.usebottles.bottles"
 
+# Flatpak inside Docker: disable bubblewrap's own sandboxing
+export FLATPAK_BWRAP=/bin/bwrap
+export container=docker
+
 log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"; }
 
 export DISPLAY=:99
