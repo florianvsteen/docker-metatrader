@@ -76,20 +76,34 @@ RUN wget -q \
     -O /home/trader/mt5setup.exe && \
     echo "MT5 installer downloaded."
 
-# ── 7. VNC password (set at build time; overridable at runtime) ──
+# ── 7. VNC password dir + fluxbox config ─────────────────────
 USER root
-RUN mkdir -p /etc/vnc && \
-    x11vnc -storepasswd "${VNC_PASSWORD}" /etc/vnc/passwd
+# VNC passwd is written at container start (entrypoint.sh) not build time,
+# because x11vnc -storepasswd needs no active display and the ENV var
+# isn't expanded during build the way we need. Just pre-create the dir.
+RUN mkdir -p /etc/vnc
 
 # Minimal fluxbox config — just a window manager, no taskbar
 RUN mkdir -p /home/trader/.fluxbox && \
     echo "session.screen0.toolbar.visible: false" > /home/trader/.fluxbox/init && \
     chown -R trader:trader /home/trader/.fluxbox
 
-# ── 8. Copy in our scripts and supervisord config ─────────────
-COPY --chown=trader:trader scripts/ /home/trader/scripts/
+# ── 8. Copy scripts and supervisord config ────────────────────
+# All files must exist at these paths relative to the Dockerfile:
+#   supervisord.conf
+#   scripts/entrypoint.sh
+#   scripts/mt5-start.sh
+#   scripts/first-run.sh
+#   scripts/write-config.sh
+#   scripts/tail-logs.sh
 COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
-RUN chmod +x /home/trader/scripts/*.sh
+COPY scripts/entrypoint.sh  /home/trader/scripts/entrypoint.sh
+COPY scripts/mt5-start.sh   /home/trader/scripts/mt5-start.sh
+COPY scripts/first-run.sh   /home/trader/scripts/first-run.sh
+COPY scripts/write-config.sh /home/trader/scripts/write-config.sh
+COPY scripts/tail-logs.sh   /home/trader/scripts/tail-logs.sh
+RUN chown -R trader:trader /home/trader/scripts && \
+    chmod +x /home/trader/scripts/*.sh
 
 # ── 9. Persistent data directories ───────────────────────────
 # These are declared here so Docker knows to treat them as
