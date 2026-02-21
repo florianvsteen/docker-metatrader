@@ -1,28 +1,20 @@
 FROM ubuntu:22.04
 
 ENV DEBIAN_FRONTEND=noninteractive
-ENV WINEPREFIX=/home/trader/.mt5
 ENV DISPLAY=:99
 ENV HOME=/home/trader
+ENV WINEPREFIX=/home/trader/.mt5
 
-# Create a non-root user — Wine refuses to run as root
 RUN useradd -m -s /bin/bash trader
 
-# Install dependencies:
-# - Xvfb: virtual display (Wine needs a display to render)
-# - x11vnc: VNC server so we can see what's happening
-# - novnc + websockify: browser-based VNC access
-# - wget/curl: for downloading installers
-# - supervisor: process manager to keep everything running
-# - Python3: for the RPyC bridge
+# Install all dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     xvfb \
     x11vnc \
-    novnc \
-    websockify \
-    openbox \
+    fluxbox \
     wget \
     curl \
+    git \
     ca-certificates \
     gnupg2 \
     software-properties-common \
@@ -31,7 +23,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     supervisor \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Wine from WineHQ (stable) — same as mt5linux.sh would do on Ubuntu
+# Clone noVNC and websockify directly from GitHub — apt package paths are unreliable
+RUN git clone --depth 1 https://github.com/novnc/noVNC.git /opt/novnc \
+    && git clone --depth 1 https://github.com/novnc/websockify.git /opt/novnc/utils/websockify \
+    && ln -s /opt/novnc/vnc.html /opt/novnc/index.html
+
+# Install Wine (WineHQ stable — same as mt5linux.sh installs)
 RUN dpkg --add-architecture i386 \
     && mkdir -pm755 /etc/apt/keyrings \
     && wget -O /etc/apt/keyrings/winehq-archive.key \
@@ -42,10 +39,10 @@ RUN dpkg --add-architecture i386 \
     && apt-get install -y --install-recommends winehq-stable \
     && rm -rf /var/lib/apt/lists/*
 
-# Install mt5linux Python bridge on host
-RUN pip3 install mt5linux --break-system-packages 2>/dev/null || pip3 install mt5linux
+# Install mt5linux bridge on host Python
+RUN pip3 install mt5linux websockify --break-system-packages 2>/dev/null \
+    || pip3 install mt5linux websockify
 
-# Copy config files
 COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 COPY start_mt5.sh /home/trader/start_mt5.sh
 RUN chmod +x /home/trader/start_mt5.sh \
