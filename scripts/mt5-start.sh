@@ -4,19 +4,20 @@
 # ================================================================
 set -euo pipefail
 
-BOTTLE_FLAG="/home/trader/.bottles_ready"
-BOTTLES_DATA="/home/trader/.local/share/bottles"
-BOTTLE_NAME="metatrader5"
-MT5_EXE="$BOTTLES_DATA/bottles/$BOTTLE_NAME/drive_c/Program Files/MetaTrader 5/terminal64.exe"
+BOTTLE_FLAG="/home/trader/.wine_ready"
+WINEPREFIX="/home/trader/.wine"
+MT5_EXE="$WINEPREFIX/drive_c/Program Files/MetaTrader 5/terminal64.exe"
 
 log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"; }
 
 export DISPLAY=:99
-export XDG_DATA_HOME=/home/trader/.local/share
 export HOME=/home/trader
+export WINEPREFIX="$WINEPREFIX"
+export WINEARCH=win64
+export WINEDEBUG=-all
 export DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/1000/bus"
 
-# ── Wait for D-Bus session bus (started by supervisord) ───────
+# ── Wait for D-Bus session bus ────────────────────────────────
 for i in $(seq 1 30); do
     [ -S /run/user/1000/bus ] && break
     sleep 1
@@ -33,8 +34,8 @@ log "Display ready."
 # ── First run ─────────────────────────────────────────────────
 if [ ! -f "$BOTTLE_FLAG" ]; then
     log "════════════════════════════════════════"
-    log "  FIRST RUN — Installing Bottles + MT5"
-    log "  This takes 10–15 minutes. Please wait."
+    log "  FIRST RUN — Installing Wine prefix + MT5"
+    log "  This takes 10–20 minutes. Please wait."
     log "════════════════════════════════════════"
     /home/trader/scripts/first-run.sh
     touch "$BOTTLE_FLAG"
@@ -55,9 +56,6 @@ log "═════════════════════════
 
 /home/trader/scripts/tail-logs.sh &
 
-bottles-cli run \
-    --bottle-name "$BOTTLE_NAME" \
-    --exec "$MT5_EXE" \
-    -- /portable
+wine "$MT5_EXE" /portable
 
 log "MT5 process exited."
