@@ -14,9 +14,13 @@ log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"; }
 export DISPLAY=:99
 export XDG_DATA_HOME=/home/trader/.local/share
 export HOME=/home/trader
+export DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/1000/bus"
 
-# ── D-Bus ─────────────────────────────────────────────────────
-eval "$(dbus-launch --sh-syntax 2>/dev/null)" || true
+# ── Wait for D-Bus session bus (started by supervisord) ───────
+for i in $(seq 1 30); do
+    [ -S /run/user/1000/bus ] && break
+    sleep 1
+done
 
 # ── Wait for Xvfb ─────────────────────────────────────────────
 log "Waiting for display :99..."
