@@ -8,7 +8,8 @@
 #   MT5_SERVER    — broker server address (e.g. ICMarkets-Demo)
 #   MT5_LOGIN     — account number
 #   MT5_PASSWORD  — account password
-#   MT5_INVESTOR  — investor (read-only) password (optional)
+#
+# MT5 will show its full UI on the Xvfb display — verify via VNC.
 # ================================================================
 
 BOTTLE_NAME="metatrader5"
@@ -22,13 +23,6 @@ cat > "$CONFIG_DIR/terminal.ini" << EOF
 Login=${MT5_LOGIN}
 Password=${MT5_PASSWORD}
 Server=${MT5_SERVER}
-InvestorPassword=${MT5_INVESTOR:-}
-
-[Common]
-; Run terminal without GUI
-ProfileLastPath=
-NewsEnable=0
-AutoConfiguration=1
 
 [Experts]
 ; Allow EAs to trade automatically
