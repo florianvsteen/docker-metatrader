@@ -22,7 +22,6 @@ services:
       - MT5_SERVER=Demo.ICMarkets.com:443   # ← your broker server
       - MT5_LOGIN=123456                     # ← your account number
       - MT5_PASSWORD=YourPasswordHere        # ← your account password
-      - MT5_INVESTOR=                        # ← investor password (optional)
       # VNC — for visual verification only (view-only by default)
       - VNC_PASSWORD=trader123               # ← change this
       - VNC_PORT=5901
