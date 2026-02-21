@@ -28,7 +28,10 @@ auto_click_dialogs() {
         xdotool search --name "Wine Gecko Installer" key Return 2>/dev/null
         xdotool search --name "Dialog" key Return 2>/dev/null
         xdotool search --name "mt5setup.exe" key Return 2>/dev/null
-        sleep 2
+        # Click Next/Install/Finish buttons in MT5 installer GUI
+        xdotool search --name "MetaTrader 5" key Return 2>/dev/null
+        xdotool search --name "Setup" key Return 2>/dev/null
+        sleep 3
     done
 }
 auto_click_dialogs &
@@ -76,8 +79,8 @@ if [ ! -f "$MT5_EXE" ]; then
     curl -L -o "$TMPDIR/mt5setup.exe" \
         "https://download.mql5.com/cdn/web/metaquotes.software.corp/mt5/mt5setup.exe"
 
-    log "[3/5] Running MT5 installer..."
-    WINEDEBUG="" WINEESYNC=0 WINEFSYNC=0 wine "$TMPDIR/mt5setup.exe" /auto &
+    log "[3/5] Running MT5 installer (GUI mode)..."
+    WINEDEBUG="" WINEESYNC=0 WINEFSYNC=0 wine "$TMPDIR/mt5setup.exe" &
 
     log "[3/5] Waiting for MT5 to install (up to 5 min)..."
     for i in $(seq 1 60); do
