@@ -1,21 +1,16 @@
 services:
   mt5:
-    build: .
+    image: ejtrader/metatrader:5
     container_name: mt5
-    environment:
-      # These feed into the auto_login.ini file
-      - MT5_USER=${MT5_USER}
-      - MT5_PASSWORD=${MT5_PASSWORD}
-      - MT5_SERVER=${MT5_BROKER}
-      # KasmVNC login (the web UI)
-      - CUSTOM_USER=${VNC_USER}
-      - PASSWORD=${VNC_PASSWORD}
-    volumes:
-      - mt5-config:/config
-    ports:
-      - "3001:3000"  # Web VNC
-      - "8001:8001"  # Python RPyC Bridge
     restart: unless-stopped
-    
+    ports:
+      - "5900:5900"     # VNC (use any VNC viewer to connect)
+      - "15555:15555"   # ejtraderMT API port 1
+      - "15556:15556"   # ejtraderMT API port 2
+      - "15557:15557"   # ejtraderMT API port 3
+      - "15558:15558"   # ejtraderMT API port 4
+    volumes:
+      - mt5-data:/data
+
 volumes:
-  mt5-config:
+  mt5-data:
