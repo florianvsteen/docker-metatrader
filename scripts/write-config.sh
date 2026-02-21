@@ -1,7 +1,6 @@
 #!/bin/bash
-BOTTLES_DATA="/home/trader/.local/share/bottles"
-BOTTLE_NAME="metatrader5"
-CONFIG_DIR="$BOTTLES_DATA/bottles/$BOTTLE_NAME/drive_c/Program Files/MetaTrader 5/config"
+WINEPREFIX="/home/trader/.wine"
+CONFIG_DIR="$WINEPREFIX/drive_c/Program Files/MetaTrader 5/config"
 mkdir -p "$CONFIG_DIR"
 
 cat > "$CONFIG_DIR/terminal.ini" << INIEOF
