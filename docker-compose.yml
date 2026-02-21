@@ -1,15 +1,5 @@
 version: "3.9"
 
-# ================================================================
-# MetaTrader 5 — Headless + VNC, Bottles (Arch Linux native)
-#
-# Before deploying in Portainer, build on the host:
-#   cd /opt/stacks/mt5-headless
-#   docker compose build
-#
-# Then Portainer → Stacks → Add Stack → Upload this file.
-# ================================================================
-
 services:
   metatrader5:
     build:
@@ -31,10 +21,10 @@ services:
       - "5901:5901"
 
     volumes:
-      # Bottles data — Wine prefix + MT5 installation
-      - bottles_data:/home/trader/.local/share/bottles
-      # First-run flag
-      - mt5_state:/home/trader/.bottles_ready
+      # Wine prefix — contains the MT5 installation
+      - wine_prefix:/home/trader/.wine
+      # First-run flag (persisted so reinstall is skipped on restart)
+      - mt5_state:/home/trader
       # EAs / Scripts / Indicators
       - ./mql5/Experts:/home/trader/mt5-data/MQL5/Experts
       - ./mql5/Scripts:/home/trader/mt5-data/MQL5/Scripts
@@ -58,10 +48,10 @@ services:
       interval: 60s
       timeout: 10s
       retries: 3
-      start_period: 120s
+      start_period: 180s
 
 volumes:
-  bottles_data:
-    name: mt5_bottles_data
+  wine_prefix:
+    name: mt5_wine_prefix
   mt5_state:
     name: mt5_state
