@@ -45,7 +45,7 @@ RUN pacman -S --noconfirm --needed \
     python \
     python-gobject \
     python-requests \
-    python-yaml \
+    python-pyyaml \
     python-chardet \
     python-markdown \
     python-pycurl \
@@ -60,17 +60,12 @@ RUN pacman -S --noconfirm --needed \
     ttf-liberation \
     noto-fonts
 
-# ── 9. python-patool from AUR (needed by Bottles) ────────────
-RUN useradd -m -G wheel -s /bin/bash builder && \
-    echo "builder ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
-USER builder
-RUN cd /tmp && \
-    git clone https://aur.archlinux.org/python-patool.git && \
-    cd python-patool && \
-    makepkg -si --noconfirm --skippgpcheck
-USER root
+# ── 9. python-patool via pip (AUR version currently broken) ───
+RUN pip install --break-system-packages patool
 
 # ── 10. Install Bottles from AUR ─────────────────────────────
+RUN useradd -m -G wheel -s /bin/bash builder && \
+    echo "builder ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
 USER builder
 RUN cd /tmp && \
     git clone https://aur.archlinux.org/bottles.git && \
