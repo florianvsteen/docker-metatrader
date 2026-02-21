@@ -1,13 +1,13 @@
 version: "3.9"
 
 # ================================================================
-# MetaTrader 5 — Headless + VNC, Bottles, Local Linux
+# MetaTrader 5 — Headless + VNC, Bottles (Arch Linux native)
 #
-# Before deploying in Portainer, build the image on the host:
+# Before deploying in Portainer, build on the host:
 #   cd /opt/stacks/mt5-headless
 #   docker compose build
 #
-# Then in Portainer → Stacks → Add Stack → Upload this file.
+# Then Portainer → Stacks → Add Stack → Upload this file.
 # ================================================================
 
 services:
@@ -18,53 +18,32 @@ services:
     container_name: metatrader5
     hostname: metatrader5
 
-    # ── Broker credentials (edit these or use a .env file) ───
     environment:
-      - MT5_SERVER=Demo.ICMarkets.com:443   # ← your broker server
-      - MT5_LOGIN=123456                     # ← your account number
-      - MT5_PASSWORD=YourPasswordHere        # ← your account password
-      # VNC — for visual verification only (view-only by default)
-      - VNC_PASSWORD=trader123               # ← change this
+      - MT5_SERVER=Demo.ICMarkets.com:443
+      - MT5_LOGIN=123456
+      - MT5_PASSWORD=YourPasswordHere
+      - VNC_PASSWORD=trader123
       - VNC_PORT=5901
       - NOVNC_PORT=6080
 
-    # ── Ports ─────────────────────────────────────────────────
     ports:
-      - "6080:6080"    # noVNC  →  http://<host>:6080/vnc.html
-      - "5901:5901"    # VNC    →  connect with any VNC client
+      - "6080:6080"
+      - "5901:5901"
 
-    # ── Volumes ───────────────────────────────────────────────
     volumes:
-      # Bottles data — Wine prefix, installed apps, bottle config
-      # Survives container rebuild. Do NOT delete between updates.
-      - bottles_data:/home/trader/.var/app/com.usebottles.bottles
-
-      # First-run flag — prevents reinstalling MT5 on every start
+      # Bottles data — Wine prefix + MT5 installation
+      - bottles_data:/home/trader/.local/share/bottles
+      # First-run flag
       - mt5_state:/home/trader/.bottles_ready
-
-      # Your EAs, scripts, indicators — edit files here on the host
-      # and they appear immediately inside MT5's MQL5 directory
+      # EAs / Scripts / Indicators
       - ./mql5/Experts:/home/trader/mt5-data/MQL5/Experts
       - ./mql5/Scripts:/home/trader/mt5-data/MQL5/Scripts
       - ./mql5/Indicators:/home/trader/mt5-data/MQL5/Indicators
-
-      # MT5 logs — readable on the host at ./logs/
+      # Logs
       - ./logs:/home/trader/mt5-data/logs
 
-    # ── Flatpak/bubblewrap requires elevated permissions ─────
-    privileged: true
-    cap_add:
-      - SYS_ADMIN
-    security_opt:
-      - apparmor:unconfined
-      - seccomp:unconfined
-    devices:
-      - /dev/fuse:/dev/fuse
+    restart: unless-stopped
 
-    # ── Networking ────────────────────────────────────────────
-    # noVNC on 6080, VNC on 5901. MT5 outbound-only to broker.
-
-    # ── Resources (tune to your machine) ──────────────────────
     deploy:
       resources:
         limits:
@@ -74,24 +53,15 @@ services:
           cpus: "0.5"
           memory: 512M
 
-    # ── Restart policy ────────────────────────────────────────
-    restart: unless-stopped
-
-    # ── Healthcheck ───────────────────────────────────────────
-    # Checks that terminal64.exe process is running inside Wine
     healthcheck:
-      test: >
-        bash -c "flatpak run --command=bottles-cli com.usebottles.bottles
-        list-programs --bottle-name metatrader5 2>/dev/null | grep -q terminal64"
+      test: ["CMD", "pgrep", "-f", "terminal64.exe"]
       interval: 60s
-      timeout: 15s
+      timeout: 10s
       retries: 3
       start_period: 120s
 
-# ── Named volumes (persistent across rebuilds) ────────────────
 volumes:
   bottles_data:
     name: mt5_bottles_data
-
   mt5_state:
     name: mt5_state
