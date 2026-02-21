@@ -8,10 +8,11 @@ set -euo pipefail
 
 log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"; }
 
-# ── Update VNC password if overridden at runtime ──────────────
-if [ -n "${VNC_PASSWORD:-}" ]; then
-    x11vnc -storepasswd "${VNC_PASSWORD}" /etc/vnc/passwd
-fi
+# ── Write VNC password (done here at runtime, not build time) ─
+VNC_PASS="${VNC_PASSWORD:-trader123}"
+log "Setting VNC password..."
+mkdir -p /etc/vnc
+x11vnc -storepasswd "${VNC_PASS}" /etc/vnc/passwd
 
 # ── D-Bus setup for Flatpak ───────────────────────────────────
 mkdir -p /run/user/1000
