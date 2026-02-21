@@ -14,10 +14,24 @@ log "Setting VNC password..."
 mkdir -p /etc/vnc
 x11vnc -storepasswd "${VNC_PASS}" /etc/vnc/passwd
 
-# ── D-Bus setup for Flatpak ───────────────────────────────────
+# ── Fix volume ownership (Docker volumes mount as root) ───────
+# Bottles needs trader to own its data dir, but named volumes
+# are created by Docker as root. Fix this at every container start.
+mkdir -p /home/trader/.local/share/bottles
+chown -R trader:trader /home/trader/.local/share
+chmod -R 755 /home/trader/.local/share
+
+# Fix the state-flag volume mount point too
+mkdir -p /home/trader/.bottles_ready
+chown trader:trader /home/trader/.bottles_ready
+
+# ── D-Bus setup ───────────────────────────────────────────────
 mkdir -p /run/user/1000
 chown trader:trader /run/user/1000
 chmod 700 /run/user/1000
+# Pre-create dbus system socket dir (needed before dbus-daemon starts)
+mkdir -p /run/dbus
+chmod 755 /run/dbus
 
 # ── Log dir for supervisor ────────────────────────────────────
 mkdir -p /var/log/supervisor
