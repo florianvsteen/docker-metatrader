@@ -5,11 +5,9 @@
 FROM archlinux:latest
 
 # ── 1. Enable multilib + upgrade + lib32 (must be one layer) ─
-# multilib must be enabled before pacman -Syu and stay in the
-# same RUN so the repo config persists into the install step.
-RUN sed -i '/^#\[multilib\]/,/^#Include/{s/^#//}' /etc/pacman.conf && \
+RUN echo -e "\n[multilib]\nInclude = /etc/pacman.d/mirrorlist" >> /etc/pacman.conf && \
     pacman -Syu --noconfirm && \
-    pacman -S --noconfirm --needed lib32-gcc-libs lib32-gnutls
+    pacman -S --noconfirm --needed lib32-gcc-libs
 
 # ── 2. Base build tools ──────────────────────────────────────
 RUN pacman -S --noconfirm --needed base-devel git wget curl
