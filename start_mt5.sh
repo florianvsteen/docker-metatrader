@@ -35,18 +35,20 @@ if [ ! -f "$WINEPREFIX/drive_c/windows/system32/kernel32.dll" ]; then
         exit 1
     fi
     log "[1/5] Wine prefix ready."
-    # Disable debugger detection — MT5 installer calls IsDebuggerPresent
-    # which Wine triggers. This registry patch defeats that check.
+    # Zero out NtGlobalFlag — this is what IsDebuggerPresent/NtQueryInformationProcess
+    # actually checks. Wine sets debug heap flags by default which trigger detection.
+    WINEDEBUG=-all wine reg add \
+        "HKEY_LOCAL_MACHINE\\SYSTEM\\CurrentControlSet\\Control\\Session Manager" \
+        /v GlobalFlag /t REG_DWORD /d "0" /f
+    WINEDEBUG=-all wine reg add \
+        "HKEY_LOCAL_MACHINE\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Memory Management" \
+        /v HeapDeCommitFreeBlockThreshold /t REG_DWORD /d "0" /f
     WINEDEBUG=-all wine reg add \
         "HKEY_LOCAL_MACHINE\\Software\\Microsoft\\Windows NT\\CurrentVersion\\AeDebug" \
         /v Auto /t REG_SZ /d "0" /f
     WINEDEBUG=-all wine reg add \
         "HKEY_LOCAL_MACHINE\\Software\\Microsoft\\Windows NT\\CurrentVersion\\AeDebug" \
         /v Debugger /t REG_SZ /d "" /f
-    # Disable heap debug flags that Wine sets by default
-    WINEDEBUG=-all wine reg add \
-        "HKEY_LOCAL_MACHINE\\SYSTEM\\CurrentControlSet\\Control\\Session Manager" \
-        /v GlobalFlag /t REG_DWORD /d "0" /f
     wineserver -w
 else
     log "[1/5] Wine prefix already initialised."
@@ -94,7 +96,14 @@ if [ ! -f "$MT5_EXE" ]; then
         "https://download.mql5.com/cdn/web/metaquotes.software.corp/mt5/mt5setup.exe"
 
     log "[4/5] Running MT5 installer..."
-    WINEDEBUG="" WINEESYNC=0 WINEFSYNC=0 wine "$TMPDIR/mt5setup.exe" /auto &
+    # NtQueryInformationProcess is what mt5setup uses to detect debuggers.
+    # Setting the heap flags to 0 via GlobalFlag and disabling PageHeap
+    # prevents Wine's debug heap from being detected.
+    WINEDEBUG="" \
+    WINEESYNC=0 \
+    WINEFSYNC=0 \
+    WINE_HEAP_DELAY_FREE=0 \
+    wine "$TMPDIR/mt5setup.exe" /auto &
     MT5_INSTALLER_PID=$!
 
     # Auto-dismiss any blocking dialogs including the debugger warning
