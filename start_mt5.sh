@@ -6,6 +6,8 @@ log "Running as: $(whoami) uid=$(id -u)"
 export DISPLAY=:99
 export WINEPREFIX=/home/trader/.mt5
 export WINEDEBUG=""
+export WINEESYNC=0
+export WINEFSYNC=0
 export HOME=/home/trader
 
 MT5_EXE="$WINEPREFIX/drive_c/Program Files/MetaTrader 5/terminal64.exe"
@@ -21,116 +23,112 @@ for i in $(seq 1 30); do
     sleep 1
 done
 
-# Auto-dismiss Wine popups (Mono/Gecko dialogs) by pressing Enter
-auto_click_dialogs() {
-    while true; do
-        xdotool search --name "Wine Mono Installer" key Return 2>/dev/null
-        xdotool search --name "Wine Gecko Installer" key Return 2>/dev/null
-        xdotool search --name "Dialog" key Return 2>/dev/null
-        xdotool search --name "mt5setup.exe" key Return 2>/dev/null
-        # Click Next/Install/Finish buttons in MT5 installer GUI
-        xdotool search --name "MetaTrader 5" key Return 2>/dev/null
-        xdotool search --name "Setup" key Return 2>/dev/null
-        sleep 3
-    done
-}
-auto_click_dialogs &
-AUTO_CLICK_PID=$!
-
-# [1/5] Initialize Wine prefix with win10 environment
+# [1/6] Initialize Wine prefix
 if [ ! -f "$WINEPREFIX/drive_c/windows/system32/kernel32.dll" ]; then
-    log "[1/5] Initialising Wine prefix..."
-    # Set win10 mode and boot — this creates the full prefix including kernel32.dll
+    log "[1/6] Initialising Wine prefix..."
     wine reg add "HKEY_CURRENT_USER\\Software\\Wine" /v Version /t REG_SZ /d "win10" /f 2>/dev/null || true
-    # Disable Wine's built-in debugger so MT5 installer doesn't detect it
-    wine reg add "HKEY_LOCAL_MACHINE\\Software\\Microsoft\\Windows NT\\CurrentVersion\\AeDebug" /v Debugger /t REG_SZ /d "" /f 2>/dev/null || true
     wine reg add "HKEY_LOCAL_MACHINE\\Software\\Microsoft\\Windows NT\\CurrentVersion\\AeDebug" /v Auto /t REG_SZ /d "0" /f 2>/dev/null || true
-    # wineboot initialises the prefix; run in bg and poll for kernel32.dll
     wineboot -u &
     for i in $(seq 1 60); do
         [ -f "$WINEPREFIX/drive_c/windows/system32/kernel32.dll" ] && \
-            log "[1/5] Wine prefix ready." && break
+            log "[1/6] Wine prefix ready." && break
         sleep 2
         log "  ...initialising Wine (${i}/60)"
     done
     wineserver -w 2>/dev/null || true
 else
-    log "[1/5] Wine prefix already initialised."
+    log "[1/6] Wine prefix already initialised."
 fi
 
-# [2/5] Install Wine Mono (required for .NET — MT5 needs this)
+# [2/6] Install Mono
 if [ ! -d "$WINEPREFIX/drive_c/windows/mono" ]; then
-    log "[2/5] Downloading Wine Mono..."
+    log "[2/6] Installing Wine Mono..."
     curl -L -o "$TMPDIR/mono.msi" \
         "https://dl.winehq.org/wine/wine-mono/10.3.0/wine-mono-10.3.0-x86.msi"
-    log "[2/5] Installing Wine Mono..."
     WINEDLLOVERRIDES="mscoree=d" wine msiexec /i "$TMPDIR/mono.msi" /qn
     wineserver -w
     sleep 3
     rm -f "$TMPDIR/mono.msi"
-    log "[2/5] Mono done."
+    log "[2/6] Mono done."
 else
-    log "[2/5] Mono already installed."
+    log "[2/6] Mono already installed."
 fi
 
-# [3/5] Install MetaTrader 5
+# [3/6] Install Gecko (provides WinInet — required for mt5setup.exe to download)
+if [ ! -f "$WINEPREFIX/drive_c/windows/system32/wine_gecko/Wine Gecko.msi" ] && \
+   [ ! -d "$WINEPREFIX/drive_c/windows/system32/gecko" ]; then
+    log "[3/6] Installing Wine Gecko (enables WinInet networking)..."
+    curl -L -o "$TMPDIR/gecko64.msi" \
+        "https://dl.winehq.org/wine/wine-gecko/2.47.4/wine-gecko-2.47.4-x86_64.msi"
+    curl -L -o "$TMPDIR/gecko32.msi" \
+        "https://dl.winehq.org/wine/wine-gecko/2.47.4/wine-gecko-2.47.4-x86.msi"
+    wine msiexec /i "$TMPDIR/gecko64.msi" /qn
+    wineserver -w
+    sleep 3
+    wine msiexec /i "$TMPDIR/gecko32.msi" /qn
+    wineserver -w
+    sleep 3
+    rm -f "$TMPDIR/gecko64.msi" "$TMPDIR/gecko32.msi"
+    log "[3/6] Gecko done."
+else
+    log "[3/6] Gecko already installed."
+fi
+
+# [4/6] Install MT5 — now that WinInet works, mt5setup.exe can download
 if [ ! -f "$MT5_EXE" ]; then
-    log "[3/5] Downloading MT5 setup..."
+    log "[4/6] Downloading MT5 setup..."
     curl -L -o "$TMPDIR/mt5setup.exe" \
         "https://download.mql5.com/cdn/web/metaquotes.software.corp/mt5/mt5setup.exe"
 
-    log "[3/5] Running MT5 installer (GUI mode)..."
-    WINEDEBUG="" WINEESYNC=0 WINEFSYNC=0 wine "$TMPDIR/mt5setup.exe" &
+    log "[4/6] Running MT5 installer..."
+    wine "$TMPDIR/mt5setup.exe" /auto &
 
-    log "[3/5] Waiting for MT5 to install (up to 5 min)..."
-    for i in $(seq 1 60); do
-        [ -f "$MT5_EXE" ] && log "[3/5] MT5 installed!" && break
+    log "[4/6] Waiting for MT5 to install (up to 8 min)..."
+    for i in $(seq 1 96); do
+        [ -f "$MT5_EXE" ] && log "[4/6] MT5 installed!" && break
         sleep 5
-        log "  ...waiting (${i}/60) | wine procs: $(ps aux | grep -c '[w]ine')"
+        log "  ...waiting (${i}/96) | wine procs: $(ps aux | grep -c '[w]ine')"
     done
 
     rm -f "$TMPDIR/mt5setup.exe"
 
     if [ ! -f "$MT5_EXE" ]; then
-        log "[3/5] Not at expected path, searching..."
         found=$(find "$WINEPREFIX" -name "terminal64.exe" 2>/dev/null | head -1)
         if [ -n "$found" ]; then
-            log "[3/5] Found at: $found"
+            log "[4/6] Found MT5 at: $found"
             MT5_EXE="$found"
         else
-            log "[3/5] ERROR: MT5 not found. drive_c contents:"
+            log "[4/6] ERROR: MT5 not found."
             ls -la "$WINEPREFIX/drive_c/Program Files/" 2>/dev/null
             exit 1
         fi
     fi
 else
-    log "[3/5] MT5 already installed."
+    log "[4/6] MT5 already installed."
 fi
 
-kill $AUTO_CLICK_PID 2>/dev/null
-
-# [4/5] Install Python in Wine + packages
+# [5/6] Install Python in Wine + packages
 if ! wine python --version &>/dev/null 2>&1; then
-    log "[4/5] Installing Python in Wine..."
+    log "[5/6] Installing Python in Wine..."
     curl -L -o "$TMPDIR/python.exe" \
         "https://www.python.org/ftp/python/3.9.13/python-3.9.13.exe"
     wine "$TMPDIR/python.exe" /quiet InstallAllUsers=1 PrependPath=1
     wineserver -w
     sleep 5
     rm -f "$TMPDIR/python.exe"
-    log "[4/5] Python done."
+    log "[5/6] Python done."
 else
-    log "[4/5] Wine Python already installed."
+    log "[5/6] Wine Python already installed."
 fi
 
-log "[4/5] Installing Wine Python packages..."
+log "[5/6] Installing Wine Python packages..."
 wine python -m pip install --upgrade pip -q
 wine python -m pip install MetaTrader5==$METATRADER_VERSION mt5linux -q
-log "[4/5] Done."
+log "[5/6] Done."
 
-# [5/5] Write auto-login config and launch MT5
+# [6/6] Launch MT5 + bridge
 if [ -n "$MT5_USER" ]; then
-    log "[5/5] Writing auto-login config for $MT5_USER..."
+    log "[6/6] Writing auto-login config for $MT5_USER..."
     cat > "$WINEPREFIX/drive_c/auto_login.ini" << INI
 [Common]
 Login=$MT5_USER
@@ -144,7 +142,7 @@ AllowDLLImport=1
 INI
     wine "$MT5_EXE" /portable "/config:C:\\auto_login.ini" &
 else
-    log "[5/5] No MT5_USER set — launching without auto-login (log in via VNC)."
+    log "[6/6] No MT5_USER — launching without auto-login (log in via VNC)."
     wine "$MT5_EXE" /portable &
 fi
 
