@@ -1,5 +1,12 @@
 #!/bin/bash
 
+log() { echo "[$(date '+%H:%M:%S')] $1"; }
+
+# Log who we're running as — this is the key diagnostic
+log "Running as user: $(whoami) (uid=$(id -u) gid=$(id -g))"
+log "WINEPREFIX owner: $(stat -c '%U' /config/.wine 2>/dev/null || echo 'not created yet')"
+log "DISPLAY=$DISPLAY"
+
 # --- Configuration ---
 mt5file='/config/.wine/drive_c/Program Files/MetaTrader 5/terminal64.exe'
 mono_url="https://dl.winehq.org/wine/wine-mono/10.3.0/wine-mono-10.3.0-x86.msi"
@@ -9,18 +16,9 @@ mt5server_port="8001"
 MT5_CMD_OPTIONS="${MT5_CMD_OPTIONS:-}"
 
 export DISPLAY="${DISPLAY:-:1}"
-
-log() { echo "[$(date '+%H:%M:%S')] $1"; }
-
-# Run a command as abc user (no password needed with gosu)
-as_abc() {
-    gosu abc env \
-        DISPLAY="$DISPLAY" \
-        WINEPREFIX="/config/.wine" \
-        WINEDEBUG="-all" \
-        HOME="/config" \
-        "$@"
-}
+export WINEPREFIX="/config/.wine"
+export WINEDEBUG="-all"
+export HOME="/config"
 
 # Wait for X
 log "Waiting for X display $DISPLAY..."
@@ -35,18 +33,28 @@ if [ -f /defaults/autostart ]; then
     cp /defaults/autostart /config/.config/openbox/autostart
 fi
 
-# Ensure Wine prefix is owned by abc
-mkdir -p /config/.wine
-chown -R abc:abc /config/.wine /config/.config
+# Fix ownership if we're root (shouldn't happen, but just in case)
+if [ "$(id -u)" = "0" ]; then
+    log "WARNING: Running as root! Wine will refuse to use the prefix."
+    log "Fixing ownership and re-executing as abc..."
+    mkdir -p /config/.wine
+    chown -R abc:abc /config/.wine /config/.config 2>/dev/null
+    exec su abc -s /bin/bash -- "$0" "$@"
+fi
+
+# From here we should be abc
+log "Confirmed running as: $(whoami)"
+
+# Ensure prefix dir exists and is writable
+mkdir -p "$WINEPREFIX"
 
 # [1/6] Install Mono
-if [ ! -d "/config/.wine/drive_c/windows/mono" ]; then
+if [ ! -d "$WINEPREFIX/drive_c/windows/mono" ]; then
     log "[1/6] Downloading Mono..."
     curl -L -o /tmp/mono.msi "$mono_url"
-    chown abc:abc /tmp/mono.msi
     log "[1/6] Installing Mono..."
-    as_abc env WINEDLLOVERRIDES="mscoree=d" wine msiexec /i /tmp/mono.msi /qn
-    as_abc wineserver -w
+    WINEDLLOVERRIDES="mscoree=d" wine msiexec /i /tmp/mono.msi /qn
+    wineserver -w
     sleep 5
     rm -f /tmp/mono.msi
     log "[1/6] Mono done."
@@ -57,15 +65,14 @@ fi
 # [2/6] Install MetaTrader 5
 if [ ! -e "$mt5file" ]; then
     log "[2/6] Setting Wine version..."
-    as_abc wine reg add "HKEY_CURRENT_USER\\Software\\Wine" /v Version /t REG_SZ /d "win10" /f
+    wine reg add "HKEY_CURRENT_USER\\Software\\Wine" /v Version /t REG_SZ /d "win10" /f
 
     log "[2/6] Downloading MT5..."
     curl -L -o /tmp/mt5setup.exe \
         "https://download.mql5.com/cdn/web/metaquotes.software.corp/mt5/mt5setup.exe"
-    chown abc:abc /tmp/mt5setup.exe
 
     log "[2/6] Running MT5 installer..."
-    as_abc wine /tmp/mt5setup.exe /auto &
+    wine /tmp/mt5setup.exe /auto &
 
     log "[2/6] Waiting for MT5 (up to 4 min)..."
     MT5_ELAPSED=0
@@ -77,18 +84,19 @@ if [ ! -e "$mt5file" ]; then
 
     if [ ! -e "$mt5file" ]; then
         log "[2/6] Not at expected path, searching..."
-        found=$(find /config/.wine -name "terminal64.exe" 2>/dev/null | head -1)
+        found=$(find "$WINEPREFIX" -name "terminal64.exe" 2>/dev/null | head -1)
         if [ -n "$found" ]; then
             log "[2/6] Found at: $found"
             mt5file="$found"
         else
-            log "[2/6] ERROR: MT5 not found. drive_c contents:"
-            ls -la "/config/.wine/drive_c/Program Files/" 2>/dev/null
+            log "[2/6] ERROR: MT5 not found. drive_c Program Files:"
+            ls -la "$WINEPREFIX/drive_c/Program Files/" 2>/dev/null
+            ls -la "$WINEPREFIX/drive_c/Program Files (x86)/" 2>/dev/null
             exit 1
         fi
     fi
 
-    as_abc wineserver -w
+    wineserver -w
     rm -f /tmp/mt5setup.exe
     log "[2/6] MT5 installed at: $mt5file"
 else
@@ -96,13 +104,12 @@ else
 fi
 
 # [3/6] Install Python in Wine
-if ! as_abc wine python --version &>/dev/null; then
+if ! wine python --version &>/dev/null; then
     log "[3/6] Downloading Python..."
     curl -L -o /tmp/python.exe "$python_url"
-    chown abc:abc /tmp/python.exe
     log "[3/6] Installing Python in Wine..."
-    as_abc wine /tmp/python.exe /quiet InstallAllUsers=1 PrependPath=1
-    as_abc wineserver -w
+    wine /tmp/python.exe /quiet InstallAllUsers=1 PrependPath=1
+    wineserver -w
     sleep 5
     rm -f /tmp/python.exe
     log "[3/6] Python done."
@@ -112,13 +119,13 @@ fi
 
 # [4/6] Install Python packages in Wine
 log "[4/6] Installing Wine Python packages..."
-as_abc wine python -m pip install --upgrade pip -q
-as_abc wine python -m pip install MetaTrader5==$metatrader_version mt5linux -q
+wine python -m pip install --upgrade pip -q
+wine python -m pip install MetaTrader5==$metatrader_version mt5linux -q
 log "[4/6] Done."
 
 # [5/6] Launch MT5
 log "[5/6] Writing auto-login config..."
-cat > "/config/.wine/drive_c/auto_login.ini" << INI
+cat > "$WINEPREFIX/drive_c/auto_login.ini" << INI
 [Common]
 Login=$MT5_USER
 Password=$MT5_PASSWORD
@@ -129,17 +136,16 @@ CertConfirm=0
 AllowLiveTrading=1
 AllowDLLImport=1
 INI
-chown abc:abc "/config/.wine/drive_c/auto_login.ini"
 
 log "[5/6] Launching MT5..."
-as_abc wine "$mt5file" /portable "/config:C:\\auto_login.ini" $MT5_CMD_OPTIONS &
+wine "$mt5file" /portable "/config:C:\\auto_login.ini" $MT5_CMD_OPTIONS &
 
 # [6/6] Bridge
 log "[6/6] Installing mt5linux on host Python..."
 pip3 install mt5linux -q --break-system-packages 2>/dev/null || pip3 install mt5linux -q
 
 log "[6/6] Starting mt5linux bridge on port $mt5server_port..."
-as_abc python3 -m mt5linux --host 0.0.0.0 -p "$mt5server_port" -w wine python.exe &
+python3 -m mt5linux --host 0.0.0.0 -p "$mt5server_port" -w wine python.exe &
 
 log "All done."
 wait
