@@ -40,6 +40,17 @@ log "Installing dotnet48 (.NET Framework 4.8)..."
 winetricks --unattended dotnet48
 log "✓ dotnet48 done."
 
+# ── Disable winedbg (triggers MT5 anti-debug check) ─────────
+log "Disabling winedbg..."
+if [ -f /usr/bin/winedbg ]; then
+    mv /usr/bin/winedbg /usr/bin/winedbg.bak
+    log "✓ winedbg disabled."
+fi
+# Clear AeDebug registry key so Windows does not spawn a debugger on crash
+wine reg add "HKLM\Software\Microsoft\Windows NT\CurrentVersion\AeDebug" /v Auto /t REG_SZ /d "0" /f 2>/dev/null || true
+wine reg add "HKLM\Software\Microsoft\Windows NT\CurrentVersion\AeDebug" /v Debugger /t REG_SZ /d "" /f 2>/dev/null || true
+wineserver -w
+
 # ── Silent MT5 install ───────────────────────────────────────
 log "Running MT5 installer silently..."
 wine "$INSTALLER" /S
