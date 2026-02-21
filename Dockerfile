@@ -7,7 +7,6 @@ ENV WINEPREFIX=/home/trader/.mt5
 
 RUN useradd -m -s /bin/bash trader
 
-# Install everything via apt — no external downloads during build
 RUN apt-get update && apt-get install -y --no-install-recommends \
     xvfb \
     x11vnc \
@@ -23,6 +22,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python3-websockify \
     novnc \
     supervisor \
+    cabextract \
+    winbind \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Wine
@@ -36,13 +37,12 @@ RUN dpkg --add-architecture i386 \
     && apt-get install -y --install-recommends winehq-stable \
     && rm -rf /var/lib/apt/lists/*
 
-# Install mt5linux bridge
-RUN pip3 install mt5linux --break-system-packages 2>/dev/null || pip3 install mt5linux
+# Install winetricks
+RUN wget -q -O /usr/local/bin/winetricks \
+        https://raw.githubusercontent.com/Winetricks/winetricks/master/src/winetricks \
+    && chmod +x /usr/local/bin/winetricks
 
-# Find and symlink noVNC to a known location
-RUN find / -name "novnc_proxy" 2>/dev/null | head -1 | xargs -I{} ln -sf {} /usr/local/bin/novnc_proxy ; \
-    find / -name "*.html" -path "*/novnc/*" 2>/dev/null | head -1 | xargs -I{} dirname {} | xargs -I{} ln -sfn {} /opt/novnc ; \
-    true
+RUN pip3 install mt5linux --break-system-packages 2>/dev/null || pip3 install mt5linux
 
 COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 COPY start_mt5.sh /home/trader/start_mt5.sh
