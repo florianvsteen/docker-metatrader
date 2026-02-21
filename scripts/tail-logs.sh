@@ -1,15 +1,17 @@
 #!/bin/bash
-BOTTLES_DATA="/home/trader/.local/share/bottles"
-BOTTLE_NAME="metatrader5"
-MT5_APPDATA="$BOTTLES_DATA/bottles/$BOTTLE_NAME/drive_c/users/trader/AppData/Roaming/MetaQuotes/Terminal"
+WINEPREFIX="/home/trader/.wine"
+# With /portable flag, MT5 stores data relative to its own dir
+MT5_PORTABLE_DATA="$WINEPREFIX/drive_c/Program Files/MetaTrader 5"
 HOST_LOGS="/home/trader/mt5-data/logs"
 
 log() { echo "[LOG-WATCHER $(date '+%H:%M:%S')] $*"; }
 log "Waiting for MT5 log directory..."
 
 TRIES=0
-while [ $TRIES -lt 12 ]; do
-    LOG_DIR=$(find "$MT5_APPDATA" -type d -name "logs" 2>/dev/null | head -1)
+LOG_DIR=""
+while [ $TRIES -lt 24 ]; do
+    # /portable stores logs in <MT5 dir>/logs/
+    LOG_DIR=$(find "$MT5_PORTABLE_DATA" -type d -name "logs" 2>/dev/null | head -1)
     [ -n "$LOG_DIR" ] && break
     sleep 5
     TRIES=$((TRIES + 1))
