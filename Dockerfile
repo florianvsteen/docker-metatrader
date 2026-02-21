@@ -26,7 +26,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Clone noVNC and websockify directly from GitHub — apt package paths are unreliable
 RUN git clone --depth 1 https://github.com/novnc/noVNC.git /opt/novnc \
     && git clone --depth 1 https://github.com/novnc/websockify.git /opt/novnc/utils/websockify \
-    && ln -s /opt/novnc/vnc.html /opt/novnc/index.html
+    && ln -s /opt/novnc/vnc.html /opt/novnc/index.html \
+    && chmod +x /opt/novnc/utils/launch.sh \
+    && chmod +x /opt/novnc/utils/websockify/run
 
 # Install Wine (WineHQ stable — same as mt5linux.sh installs)
 RUN dpkg --add-architecture i386 \
