@@ -1,11 +1,13 @@
 version: "3.9"
 
 # ================================================================
-# MetaTrader 5 — Headless, Bottles, Local Linux
-# No GUI. Runs EAs and scripts silently in the background.
+# MetaTrader 5 — Headless + VNC, Bottles, Local Linux
 #
-# Portainer: Stacks → Add Stack → paste this file
-# CLI:       docker compose up -d --build
+# Before deploying in Portainer, build the image on the host:
+#   cd /opt/stacks/mt5-headless
+#   docker compose build
+#
+# Then in Portainer → Stacks → Add Stack → Upload this file.
 # ================================================================
 
 services:
@@ -49,11 +51,13 @@ services:
       # MT5 logs — readable on the host at ./logs/
       - ./logs:/home/trader/mt5-data/logs
 
-    # ── Flatpak requires these to sandbox correctly ───────────
+    # ── Flatpak/bubblewrap requires elevated permissions ─────
+    privileged: true
     cap_add:
       - SYS_ADMIN
     security_opt:
       - apparmor:unconfined
+      - seccomp:unconfined
     devices:
       - /dev/fuse:/dev/fuse
 
