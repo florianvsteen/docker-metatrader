@@ -4,61 +4,48 @@
 # ================================================================
 FROM archlinux:latest
 
-# ── 1. Full system update + enable multilib + all packages ────
-# Always combine -Syu with package installs in Arch to avoid
-# partial upgrade issues with split RUN layers.
+# ── 1. Enable multilib + full system upgrade ─────────────────
 RUN sed -i '/^#\[multilib\]/,/^#Include/{s/^#//}' /etc/pacman.conf && \
-    pacman -Syu --noconfirm && \
-    pacman -S --noconfirm --needed \
-        # Build tools
-        base-devel \
-        git \
-        wget \
-        curl \
-        # Wine + deps
-        wine \
-        wine-mono \
-        wine-gecko \
-        winetricks \
-        cabextract \
-        lib32-gcc-libs \
-        lib32-gnutls \
-        # Display + VNC
-        xorg-server-xvfb \
-        xorg-xdpyinfo \
-        x11vnc \
-        fluxbox \
-        xdotool \
-        # Python
-        python \
-        python-pip \
-        python-gobject \
-        python-requests \
-        python-yaml \
-        python-chardet \
-        python-markdown \
-        python-pycurl \
-        p7zip \
-        # System
-        supervisor \
-        dbus \
-        inotify-tools \
-        procps-ng \
-        ttf-liberation \
-        noto-fonts \
-    && pacman -Scc --noconfirm
+    pacman -Syu --noconfirm
 
-# ── 2. pip packages not in Arch repos ────────────────────────
-RUN pip install --break-system-packages \
-    novnc \
-    websockify \
-    patool
+# ── 2. Base build tools ──────────────────────────────────────
+RUN pacman -S --noconfirm --needed base-devel git wget curl
 
-# ── 3. Build user for AUR (makepkg refuses root) ─────────────
+# ── 3. Wine ──────────────────────────────────────────────────
+RUN pacman -S --noconfirm --needed wine wine-mono wine-gecko winetricks cabextract
+
+# ── 4. lib32 ─────────────────────────────────────────────────
+RUN pacman -S --noconfirm --needed lib32-gcc-libs lib32-gnutls
+
+# ── 5. Display + VNC ─────────────────────────────────────────
+RUN pacman -S --noconfirm --needed xorg-server-xvfb xorg-xdpyinfo x11vnc fluxbox xdotool
+
+# ── 6. Python ────────────────────────────────────────────────
+RUN pacman -S --noconfirm --needed python python-pip
+
+# ── 7. Python packages ───────────────────────────────────────
+RUN pacman -S --noconfirm --needed python-gobject
+RUN pacman -S --noconfirm --needed python-requests
+RUN pacman -S --noconfirm --needed python-yaml
+RUN pacman -S --noconfirm --needed python-chardet
+RUN pacman -S --noconfirm --needed python-markdown
+RUN pacman -S --noconfirm --needed python-pycurl
+RUN pacman -S --noconfirm --needed p7zip
+
+# ── 8. System tools ──────────────────────────────────────────
+RUN pacman -S --noconfirm --needed supervisor dbus inotify-tools procps-ng
+
+# ── 9. Fonts ─────────────────────────────────────────────────
+RUN pacman -S --noconfirm --needed ttf-liberation noto-fonts
+
+# ── 10. pip packages ─────────────────────────────────────────
+RUN pip install --break-system-packages novnc websockify patool
+
+# ── 11. Build user for AUR ───────────────────────────────────
 RUN useradd -m -G wheel -s /bin/bash builder && \
     echo "builder ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
 
-# ── 4. Install Bottles from AUR ──────────────────────────────
+# ── 12. Install Bottles from AUR ─────────────────────────────
 USER builder
 RUN cd /tmp && \
     git clone https://aur.archlinux.org/bottles.git && \
@@ -66,23 +53,23 @@ RUN cd /tmp && \
     makepkg -si --noconfirm --skippgpcheck
 USER root
 
-# ── 5. Create trader user ─────────────────────────────────────
+# ── 13. Create trader user ────────────────────────────────────
 RUN useradd -m -u 1000 -s /bin/bash trader
 
-# ── 6. Download MT5 installer ─────────────────────────────────
+# ── 14. Download MT5 installer ────────────────────────────────
 RUN wget -q \
     "https://download.mql5.com/cdn/web/metaquotes.software.corp/mt5/mt5setup.exe" \
     -O /home/trader/mt5setup.exe && \
     chown trader:trader /home/trader/mt5setup.exe
 
-# ── 7. VNC dir + fluxbox config ──────────────────────────────
+# ── 15. VNC dir + fluxbox config ─────────────────────────────
 RUN mkdir -p /etc/vnc && \
     mkdir -p /home/trader/.fluxbox && \
     echo "session.screen0.toolbar.visible: false" \
         > /home/trader/.fluxbox/init && \
     chown -R trader:trader /home/trader/.fluxbox
 
-# ── 8. Copy scripts and supervisord config ───────────────────
+# ── 16. Copy scripts and supervisord config ───────────────────
 COPY supervisord.conf /etc/supervisord.conf
 COPY scripts/entrypoint.sh   /home/trader/scripts/entrypoint.sh
 COPY scripts/mt5-start.sh    /home/trader/scripts/mt5-start.sh
@@ -92,7 +79,7 @@ COPY scripts/tail-logs.sh    /home/trader/scripts/tail-logs.sh
 RUN chown -R trader:trader /home/trader/scripts && \
     chmod +x /home/trader/scripts/*.sh
 
-# ── 9. Persistent data directories ───────────────────────────
+# ── 17. Persistent data directories ──────────────────────────
 RUN mkdir -p \
     /home/trader/mt5-data/MQL5/Experts \
     /home/trader/mt5-data/MQL5/Scripts \
