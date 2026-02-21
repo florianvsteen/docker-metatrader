@@ -1,73 +1,70 @@
 #!/bin/bash
 # ================================================================
-# first-run.sh — Native Bottles (Arch AUR, no Flatpak)
+# first-run.sh — Direct Wine (no Bottles)
 # ================================================================
 set -euo pipefail
 
 INSTALLER="/home/trader/mt5setup.exe"
-BOTTLES_DATA="/home/trader/.local/share/bottles"
-BOTTLE_NAME="metatrader5"
+WINEPREFIX="/home/trader/.wine"
+MT5_DIR="$WINEPREFIX/drive_c/Program Files/MetaTrader 5"
 
 log() { echo "[SETUP $(date '+%H:%M:%S')] $*"; }
 
 export DISPLAY=:99
-export XDG_DATA_HOME=/home/trader/.local/share
 export HOME=/home/trader
+export WINEPREFIX="$WINEPREFIX"
+export WINEARCH=win64
+export WINEDEBUG=-all
 export DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/1000/bus"
 
-# ── Wait for D-Bus session to be ready ───────────────────────
+# ── Wait for D-Bus ────────────────────────────────────────────
 log "Waiting for D-Bus session bus..."
 for i in $(seq 1 30); do
     [ -S /run/user/1000/bus ] && break
     sleep 1
 done
-[ -S /run/user/1000/bus ] && log "✓ D-Bus session ready." || log "⚠ D-Bus socket not found, continuing anyway..."
+[ -S /run/user/1000/bus ] && log "✓ D-Bus ready." || log "⚠ D-Bus socket not found, continuing..."
 
-# ── Create Bottle ─────────────────────────────────────────────
-log "Creating bottle '$BOTTLE_NAME' (Windows 10, win64)..."
-log "This will take 5–10 minutes on first run..."
+# ── Init Wine prefix ─────────────────────────────────────────
+log "Initialising Wine prefix (win64)..."
+wineboot --init
+log "✓ Wine prefix ready."
 
-bottles-cli new \
-    --bottle-name "$BOTTLE_NAME" \
-    --environment custom \
-    --arch win64
-
-log "✓ Bottle created."
-
-# ── Install dependencies ──────────────────────────────────────
-log "Installing vcrun2019..."
-bottles-cli install-dep --bottle-name "$BOTTLE_NAME" --dep vcrun2019
+# ── Install vcrun2019 via winetricks ─────────────────────────
+log "Installing vcrun2019 (Visual C++ 2019 runtime)..."
+winetricks --unattended vcrun2019
 log "✓ vcrun2019 done."
 
-log "Installing dotnet48..."
-bottles-cli install-dep --bottle-name "$BOTTLE_NAME" --dep dotnet48
+# ── Install dotnet48 via winetricks ──────────────────────────
+log "Installing dotnet48 (.NET Framework 4.8)..."
+winetricks --unattended dotnet48
 log "✓ dotnet48 done."
 
-# ── Silent MT5 install ────────────────────────────────────────
+# ── Silent MT5 install ───────────────────────────────────────
 log "Running MT5 installer silently..."
-bottles-cli run --bottle-name "$BOTTLE_NAME" --exec "$INSTALLER" -- /S
+wine "$INSTALLER" /S
 
 # Poll for terminal64.exe
-MT5_BINARY="$BOTTLES_DATA/bottles/$BOTTLE_NAME/drive_c/Program Files/MetaTrader 5/terminal64.exe"
 log "Waiting for MT5 installation to complete..."
 TRIES=0
-while [ ! -f "$MT5_BINARY" ] && [ $TRIES -lt 60 ]; do
+while [ ! -f "$MT5_DIR/terminal64.exe" ] && [ $TRIES -lt 60 ]; do
     sleep 5
     TRIES=$((TRIES + 1))
     log "  Waiting... ($((TRIES * 5))s)"
 done
 
-if [ -f "$MT5_BINARY" ]; then
-    log "✓ MT5 installed: $MT5_BINARY"
+if [ -f "$MT5_DIR/terminal64.exe" ]; then
+    log "✓ MT5 installed: $MT5_DIR/terminal64.exe"
 else
     log "⚠ terminal64.exe not found after 5 min."
-    log "  Check: ls \"$BOTTLES_DATA/bottles/$BOTTLE_NAME/drive_c/Program Files/\""
+    log "  Contents of Program Files:"
+    ls "$WINEPREFIX/drive_c/Program Files/" 2>/dev/null || true
     exit 1
 fi
 
 # ── Symlink MQL5 dirs to host volume ─────────────────────────
-log "Linking host mql5/ dirs into Bottle..."
-MT5_MQL5="$BOTTLES_DATA/bottles/$BOTTLE_NAME/drive_c/Program Files/MetaTrader 5/MQL5"
+log "Linking host mql5/ dirs into Wine prefix..."
+MT5_MQL5="$MT5_DIR/MQL5"
 HOST_MQL5="/home/trader/mt5-data/MQL5"
 
 for dir in Experts Scripts Indicators; do
