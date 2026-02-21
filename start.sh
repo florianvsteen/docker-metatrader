@@ -12,14 +12,14 @@ export DISPLAY="${DISPLAY:-:1}"
 
 log() { echo "[$(date '+%H:%M:%S')] $1"; }
 
-# Run a command as the abc user with correct Wine env
-wine_cmd() {
-    su -s /bin/bash abc -c "
-        export DISPLAY='$DISPLAY'
-        export WINEPREFIX='/config/.wine'
-        export WINEDEBUG='-all'
-        $*
-    "
+# Run a command as abc user (no password needed with gosu)
+as_abc() {
+    gosu abc env \
+        DISPLAY="$DISPLAY" \
+        WINEPREFIX="/config/.wine" \
+        WINEDEBUG="-all" \
+        HOME="/config" \
+        "$@"
 }
 
 # Wait for X
@@ -35,9 +35,9 @@ if [ -f /defaults/autostart ]; then
     cp /defaults/autostart /config/.config/openbox/autostart
 fi
 
-# Ensure Wine prefix dir is owned by abc
+# Ensure Wine prefix is owned by abc
 mkdir -p /config/.wine
-chown -R abc:abc /config/.wine
+chown -R abc:abc /config/.wine /config/.config
 
 # [1/6] Install Mono
 if [ ! -d "/config/.wine/drive_c/windows/mono" ]; then
@@ -45,8 +45,8 @@ if [ ! -d "/config/.wine/drive_c/windows/mono" ]; then
     curl -L -o /tmp/mono.msi "$mono_url"
     chown abc:abc /tmp/mono.msi
     log "[1/6] Installing Mono..."
-    wine_cmd "WINEDLLOVERRIDES='mscoree=d' wine msiexec /i /tmp/mono.msi /qn"
-    wine_cmd "wineserver -w"
+    as_abc env WINEDLLOVERRIDES="mscoree=d" wine msiexec /i /tmp/mono.msi /qn
+    as_abc wineserver -w
     sleep 5
     rm -f /tmp/mono.msi
     log "[1/6] Mono done."
@@ -56,14 +56,16 @@ fi
 
 # [2/6] Install MetaTrader 5
 if [ ! -e "$mt5file" ]; then
+    log "[2/6] Setting Wine version..."
+    as_abc wine reg add "HKEY_CURRENT_USER\\Software\\Wine" /v Version /t REG_SZ /d "win10" /f
+
     log "[2/6] Downloading MT5..."
-    wine_cmd "wine reg add 'HKEY_CURRENT_USER\\Software\\Wine' /v Version /t REG_SZ /d 'win10' /f"
     curl -L -o /tmp/mt5setup.exe \
         "https://download.mql5.com/cdn/web/metaquotes.software.corp/mt5/mt5setup.exe"
     chown abc:abc /tmp/mt5setup.exe
 
     log "[2/6] Running MT5 installer..."
-    wine_cmd "wine /tmp/mt5setup.exe /auto" &
+    as_abc wine /tmp/mt5setup.exe /auto &
 
     log "[2/6] Waiting for MT5 (up to 4 min)..."
     MT5_ELAPSED=0
@@ -86,7 +88,7 @@ if [ ! -e "$mt5file" ]; then
         fi
     fi
 
-    wine_cmd "wineserver -w"
+    as_abc wineserver -w
     rm -f /tmp/mt5setup.exe
     log "[2/6] MT5 installed at: $mt5file"
 else
@@ -94,13 +96,13 @@ else
 fi
 
 # [3/6] Install Python in Wine
-if ! wine_cmd "wine python --version" &>/dev/null; then
+if ! as_abc wine python --version &>/dev/null; then
     log "[3/6] Downloading Python..."
     curl -L -o /tmp/python.exe "$python_url"
     chown abc:abc /tmp/python.exe
     log "[3/6] Installing Python in Wine..."
-    wine_cmd "wine /tmp/python.exe /quiet InstallAllUsers=1 PrependPath=1"
-    wine_cmd "wineserver -w"
+    as_abc wine /tmp/python.exe /quiet InstallAllUsers=1 PrependPath=1
+    as_abc wineserver -w
     sleep 5
     rm -f /tmp/python.exe
     log "[3/6] Python done."
@@ -110,13 +112,13 @@ fi
 
 # [4/6] Install Python packages in Wine
 log "[4/6] Installing Wine Python packages..."
-wine_cmd "wine python -m pip install --upgrade pip -q"
-wine_cmd "wine python -m pip install MetaTrader5==$metatrader_version mt5linux -q"
+as_abc wine python -m pip install --upgrade pip -q
+as_abc wine python -m pip install MetaTrader5==$metatrader_version mt5linux -q
 log "[4/6] Done."
 
 # [5/6] Launch MT5
 log "[5/6] Writing auto-login config..."
-su -s /bin/bash abc -c "cat > '/config/.wine/drive_c/auto_login.ini'" << INI
+cat > "/config/.wine/drive_c/auto_login.ini" << INI
 [Common]
 Login=$MT5_USER
 Password=$MT5_PASSWORD
@@ -127,20 +129,17 @@ CertConfirm=0
 AllowLiveTrading=1
 AllowDLLImport=1
 INI
+chown abc:abc "/config/.wine/drive_c/auto_login.ini"
 
 log "[5/6] Launching MT5..."
-wine_cmd "wine '$mt5file' /portable '/config:C:\\auto_login.ini' $MT5_CMD_OPTIONS" &
+as_abc wine "$mt5file" /portable "/config:C:\\auto_login.ini" $MT5_CMD_OPTIONS &
 
 # [6/6] Bridge
 log "[6/6] Installing mt5linux on host Python..."
 pip3 install mt5linux -q --break-system-packages 2>/dev/null || pip3 install mt5linux -q
 
 log "[6/6] Starting mt5linux bridge on port $mt5server_port..."
-su -s /bin/bash abc -c "
-    export DISPLAY='$DISPLAY'
-    export WINEPREFIX='/config/.wine'
-    python3 -m mt5linux --host 0.0.0.0 -p $mt5server_port -w wine python.exe
-" &
+as_abc python3 -m mt5linux --host 0.0.0.0 -p "$mt5server_port" -w wine python.exe &
 
 log "All done."
 wait
