@@ -34,7 +34,7 @@ RUN sed -i '/^#\[multilib\]/,/^#Include/{s/^#//}' /etc/pacman.conf && \
         python-pip \
         python-gobject \
         python-requests \
-        python-pyyaml \
+        python-yaml \
         python-chardet \
         python-markdown \
         python-pycurl \
