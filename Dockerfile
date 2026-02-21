@@ -59,7 +59,7 @@ RUN pacman -S --noconfirm --needed \
 RUN pip install --break-system-packages novnc websockify
 
 # ── 10. Build user for AUR ────────────────────────────────────
-RUN useradd -m -G wheel -s /bin/bash builder && \
+RUN useradd -m -u 1001 -G wheel -s /bin/bash builder && \
     echo "builder ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
 
 # ── 11. AUR packages (all required by Bottles) ───────────────
