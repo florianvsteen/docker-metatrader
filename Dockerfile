@@ -11,6 +11,7 @@ RUN useradd -m -s /bin/bash trader
 RUN apt-get update && apt-get install -y --no-install-recommends \
     xvfb \
     x11vnc \
+    xdotool \
     fluxbox \
     wget \
     curl \
