@@ -41,7 +41,8 @@ RUN pacman -S --noconfirm --needed \
 
 # ── 6. noVNC ─────────────────────────────────────────────────
 RUN pacman -S --noconfirm --needed python python-pip && \
-    pip install --break-system-packages novnc websockify
+    pip install --break-system-packages websockify && \
+    git clone --depth 1 https://github.com/novnc/noVNC.git /opt/novnc
 
 # ── 7. Create trader user (UID 1000) ─────────────────────────
 RUN useradd -m -u 1000 -s /bin/bash trader && \
