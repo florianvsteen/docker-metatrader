@@ -1,13 +1,95 @@
-services:
-  mt5:
-    build: .
-    container_name: mt5
-    restart: unless-stopped
-    ports:
-      - "3001:8080"
-    volumes:
-      - mt5-dev-data:/root
-    shm_size: '256mb'
+version: "3.9"
 
+# ================================================================
+# MetaTrader 5 — Headless, Bottles, Local Linux
+# No GUI. Runs EAs and scripts silently in the background.
+#
+# Portainer: Stacks → Add Stack → paste this file
+# CLI:       docker compose up -d --build
+# ================================================================
+
+services:
+  metatrader5:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: mt5-headless:latest
+    container_name: metatrader5
+    hostname: metatrader5
+
+    # ── Broker credentials (edit these or use a .env file) ───
+    environment:
+      - MT5_SERVER=Demo.ICMarkets.com:443   # ← your broker server
+      - MT5_LOGIN=123456                     # ← your account number
+      - MT5_PASSWORD=YourPasswordHere        # ← your account password
+      - MT5_INVESTOR=                        # ← investor password (optional)
+      # VNC — for visual verification only (view-only by default)
+      - VNC_PASSWORD=trader123               # ← change this
+      - VNC_PORT=5901
+      - NOVNC_PORT=6080
+
+    # ── Ports ─────────────────────────────────────────────────
+    ports:
+      - "6080:6080"    # noVNC  →  http://<host>:6080/vnc.html
+      - "5901:5901"    # VNC    →  connect with any VNC client
+
+    # ── Volumes ───────────────────────────────────────────────
+    volumes:
+      # Bottles data — Wine prefix, installed apps, bottle config
+      # Survives container rebuild. Do NOT delete between updates.
+      - bottles_data:/home/trader/.var/app/com.usebottles.bottles
+
+      # First-run flag — prevents reinstalling MT5 on every start
+      - mt5_state:/home/trader/.bottles_ready
+
+      # Your EAs, scripts, indicators — edit files here on the host
+      # and they appear immediately inside MT5's MQL5 directory
+      - ./mql5/Experts:/home/trader/mt5-data/MQL5/Experts
+      - ./mql5/Scripts:/home/trader/mt5-data/MQL5/Scripts
+      - ./mql5/Indicators:/home/trader/mt5-data/MQL5/Indicators
+
+      # MT5 logs — readable on the host at ./logs/
+      - ./logs:/home/trader/mt5-data/logs
+
+    # ── Flatpak requires these to sandbox correctly ───────────
+    cap_add:
+      - SYS_ADMIN
+    security_opt:
+      - apparmor:unconfined
+    devices:
+      - /dev/fuse:/dev/fuse
+
+    # ── Networking ────────────────────────────────────────────
+    # noVNC on 6080, VNC on 5901. MT5 outbound-only to broker.
+
+    # ── Resources (tune to your machine) ──────────────────────
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 2G
+        reservations:
+          cpus: "0.5"
+          memory: 512M
+
+    # ── Restart policy ────────────────────────────────────────
+    restart: unless-stopped
+
+    # ── Healthcheck ───────────────────────────────────────────
+    # Checks that terminal64.exe process is running inside Wine
+    healthcheck:
+      test: >
+        bash -c "flatpak run --command=bottles-cli com.usebottles.bottles
+        list-programs --bottle-name metatrader5 2>/dev/null | grep -q terminal64"
+      interval: 60s
+      timeout: 15s
+      retries: 3
+      start_period: 120s
+
+# ── Named volumes (persistent across rebuilds) ────────────────
 volumes:
-  mt5-dev-data:
+  bottles_data:
+    name: mt5_bottles_data
+
+  mt5_state:
+    name: mt5_state
