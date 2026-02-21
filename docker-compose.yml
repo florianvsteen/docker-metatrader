@@ -1,18 +1,16 @@
 services:
   mt5:
-    image: fortesenselabs/metatrader:5
+    image: gmag11/metatrader5_vnc
     container_name: mt5
     restart: unless-stopped
-    privileged: true          # Required for Xvfb virtual display to work
     environment:
-      - DISPLAY=:0
+      - CUSTOM_USER=${VNC_USER}
+      - PASSWORD=${VNC_PASSWORD}
     ports:
-      - "5900:5900"           # VNC viewer (password: root)
-      - "8001:8000"           # REST API — http://your-server:8000/docs
-      - "3001:3000"           # Socket.io API
+      - "3001:3000"   # Web VNC — open http://your-server:3000 in browser
+      - "8001:8001"   # RPyC Python bridge
     volumes:
-      - mt5-data:/data
-    shm_size: '256mb'         # Prevents X server crashes under low shared memory
+      - mt5-config:/config
 
 volumes:
-  mt5-data:
+  mt5-config:
