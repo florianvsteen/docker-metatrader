@@ -40,16 +40,15 @@ RUN pacman -S --noconfirm --needed \
 RUN pacman -S --noconfirm --needed python-pip && \
     pip install --break-system-packages novnc websockify
 
-# ── 7. Python + Bottles dependencies ─────────────────────────
-RUN pacman -S --noconfirm --needed \
-    python \
-    python-gobject \
-    python-requests \
-    python-pyyaml \
-    python-chardet \
-    python-markdown \
-    python-pycurl \
-    p7zip
+# ── 7. Python + Bottles dependencies (split to identify failures) ─
+RUN pacman -S --noconfirm --needed python
+RUN pacman -S --noconfirm --needed python-gobject
+RUN pacman -S --noconfirm --needed python-requests
+RUN pacman -S --noconfirm --needed python-pyyaml
+RUN pacman -S --noconfirm --needed python-chardet
+RUN pacman -S --noconfirm --needed python-markdown
+RUN pacman -S --noconfirm --needed python-pycurl
+RUN pacman -S --noconfirm --needed p7zip
 
 # ── 8. System utilities ───────────────────────────────────────
 RUN pacman -S --noconfirm --needed \
